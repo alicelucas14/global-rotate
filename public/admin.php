@@ -196,6 +196,7 @@ $current_user = rotator_auth_user();
     width:100%; padding:10px 12px; border-radius:10px;
     border:1px solid #2a3a63; background:#0d1530; color:#e7ecf5; font-size:.9rem; }
   textarea { resize:vertical; min-height:64px; font-family:ui-monospace,monospace; }
+  textarea.f-hosts { min-height:150px; }
   button { cursor:pointer; border:0; border-radius:10px; padding:10px 16px;
     font-weight:600; font-size:.9rem; }
   .primary { background:#3b7bff; color:#fff; }
