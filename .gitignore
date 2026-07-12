@@ -1,0 +1,14 @@
+node_modules/
+.vercel/
+.env
+.env*.local
+*.log
+.DS_Store
+
+# Build/upload artifacts
+*.zip
+_upload/
+
+# Runtime data written by the admin panel (don't overwrite live rules on deploy)
+rotator-data.json
+

@@ -1,0 +1,14 @@
+{
+    "rules": [
+        {
+            "id": "main",
+            "label": "Main",
+            "hosts": ["domains-rotate.store"],
+            "targets": [
+                "https://site-a.com",
+                "https://site-b.net"
+            ],
+            "enabled": true
+        }
+    ]
+}

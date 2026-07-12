@@ -1,0 +1,17 @@
+{
+  "name": "global-rotate",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Automatic domain rotator: sends visitors to a working mirror when the primary domain is blocked in Indonesia.",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node scripts/dev-server.js",
+    "dev:vercel": "vercel dev",
+    "deploy": "vercel --prod",
+    "check": "node scripts/check.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
