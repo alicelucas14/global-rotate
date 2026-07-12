@@ -72,6 +72,7 @@ if ($action === 'save' && is_logged_in()) {
                 $rules[] = [
                     'id'      => $r['id'] ?? uniqid('r'),
                     'label'   => $label !== '' ? $label : 'Untitled',
+                    'slug'    => rotator_slug($label !== '' ? $label : 'Untitled'),
                     'hosts'   => $hosts,
                     'targets' => $targets,
                     'enabled' => $enabled,
@@ -92,9 +93,9 @@ $rules = $data['rules'];
 // Seed the three brands the first time (when there is no data yet).
 if (empty($rules)) {
     $rules = [
-        ['id' => 'gold888',    'label' => 'Gold888',    'hosts' => [], 'targets' => [], 'enabled' => true],
-        ['id' => 'polaslot88', 'label' => 'Polaslot88', 'hosts' => [], 'targets' => [], 'enabled' => true],
-        ['id' => 'wings365',   'label' => 'Wings365',   'hosts' => [], 'targets' => [], 'enabled' => true],
+        ['id' => 'gold888',    'label' => 'Gold888',    'slug' => 'gold888',    'hosts' => [], 'targets' => [], 'enabled' => true],
+        ['id' => 'polaslot88', 'label' => 'Polaslot88', 'slug' => 'polaslot88', 'hosts' => [], 'targets' => [], 'enabled' => true],
+        ['id' => 'wings365',   'label' => 'Wings365',   'slug' => 'wings365',   'hosts' => [], 'targets' => [], 'enabled' => true],
     ];
 }
 
@@ -228,6 +229,14 @@ $token = csrf_token();
           <div class="hint">First reachable one wins; blocked ones are skipped.</div>
         </div>
       </div>
+      <div style="margin-top:14px;">
+        <label>Player link (share this)</label>
+        <div style="display:flex;gap:8px;max-width:560px;">
+          <input type="text" class="f-link" readonly style="cursor:text;" />
+          <button type="button" class="ghost f-copy" style="flex:0 0 auto;">Copy</button>
+        </div>
+        <div class="hint">Give this link to players for this brand. Or point a dedicated entry domain at it using the Entry domains box above-left.</div>
+      </div>
     </div>
   </template>
 
@@ -284,8 +293,18 @@ $token = csrf_token();
       item.addEventListener('click', function () { selectPanel(key); });
       sideList.appendChild(item);
 
+      var linkInput = node.querySelector('.f-link');
+      function slugify(s){ return String(s||'').toLowerCase().replace(/[^a-z0-9]/g,''); }
+      function updateLink(){ linkInput.value = location.protocol + '//' + location.host + '/?b=' + slugify(labelInput.value); }
+      updateLink();
+      node.querySelector('.f-copy').addEventListener('click', function(){
+        linkInput.select();
+        try { navigator.clipboard.writeText(linkInput.value); } catch(e){ try { document.execCommand('copy'); } catch(_){} }
+      });
+
       labelInput.addEventListener('input', function () {
         name.textContent = labelInput.value || 'Untitled';
+        updateLink();
       });
       enabledInput.addEventListener('change', function () {
         item.classList.toggle('off', !enabledInput.checked);

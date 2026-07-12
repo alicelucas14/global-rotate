@@ -1,8 +1,25 @@
 <?php
 require __DIR__ . '/rotator_lib.php';
 
-$data    = rotator_load();
-$rule    = rotator_match_rule($data, $_SERVER['HTTP_HOST'] ?? '');
+$data = rotator_load();
+
+// Decide which brand this visitor belongs to:
+//   1. a dedicated entry domain (host) wins,
+//   2. else a brand slug from ?b=slug or the URL path (/slug),
+//   3. else the first enabled brand as a default.
+$rule = rotator_match_host($data, $_SERVER['HTTP_HOST'] ?? '');
+if (!$rule) {
+    $slug = isset($_GET['b']) ? $_GET['b'] : '';
+    if ($slug === '') {
+        $path = parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH);
+        $slug = trim((string)$path, '/');
+    }
+    $rule = rotator_match_slug($data, $slug);
+}
+if (!$rule) {
+    $rule = rotator_first_enabled($data);
+}
+
 $targets = rotator_rule_targets($rule);
 ?><!doctype html>
 <html lang="id">

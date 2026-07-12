@@ -88,3 +88,46 @@ function rotator_rule_targets($rule) {
     }
     return $out;
 }
+
+/** Turn a label/name into a URL-safe slug, e.g. "Wings 365" -> "wings365". */
+function rotator_slug($s) {
+    return preg_replace('/[^a-z0-9]/', '', strtolower((string)$s));
+}
+
+/** Exact enabled host match, or null. */
+function rotator_match_host($data, $host) {
+    $host      = rotator_norm_host($host);
+    $hostNoWww = preg_replace('/^www\./', '', $host);
+    foreach ($data['rules'] as $rule) {
+        if (empty($rule['enabled'])) continue;
+        $hosts = (isset($rule['hosts']) && is_array($rule['hosts'])) ? $rule['hosts'] : [];
+        foreach ($hosts as $rh) {
+            $rh      = rotator_norm_host($rh);
+            $rhNoWww = preg_replace('/^www\./', '', $rh);
+            if ($rh !== '' && ($rh === $host || $rhNoWww === $hostNoWww)) {
+                return $rule;
+            }
+        }
+    }
+    return null;
+}
+
+/** Enabled rule whose slug matches (from ?b= or the URL path), or null. */
+function rotator_match_slug($data, $slug) {
+    $slug = rotator_slug($slug);
+    if ($slug === '') return null;
+    foreach ($data['rules'] as $rule) {
+        if (empty($rule['enabled'])) continue;
+        $rs = rotator_slug($rule['slug'] ?? $rule['label'] ?? '');
+        if ($rs !== '' && $rs === $slug) return $rule;
+    }
+    return null;
+}
+
+/** First enabled rule (used as the default), or null. */
+function rotator_first_enabled($data) {
+    foreach ($data['rules'] as $rule) {
+        if (!empty($rule['enabled'])) return $rule;
+    }
+    return null;
+}
