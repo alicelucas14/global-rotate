@@ -88,6 +88,16 @@ if ($action === 'save' && is_logged_in()) {
 
 $data  = rotator_load();
 $rules = $data['rules'];
+
+// Seed the three brands the first time (when there is no data yet).
+if (empty($rules)) {
+    $rules = [
+        ['id' => 'gold888',    'label' => 'Gold888',    'hosts' => [], 'targets' => [], 'enabled' => true],
+        ['id' => 'polaslot88', 'label' => 'Polaslot88', 'hosts' => [], 'targets' => [], 'enabled' => true],
+        ['id' => 'wings365',   'label' => 'Wings365',   'hosts' => [], 'targets' => [], 'enabled' => true],
+    ];
+}
+
 $token = csrf_token();
 ?><!doctype html>
 <html lang="en">
@@ -104,7 +114,24 @@ $token = csrf_token();
   header { display:flex; align-items:center; justify-content:space-between;
     padding:14px 20px; background:#111a33; border-bottom:1px solid #1e2b4d; }
   header h1 { font-size:1.05rem; margin:0; }
-  main { max-width:920px; margin:0 auto; padding:22px 16px 60px; }
+  main { max-width:1040px; margin:0 auto; padding:22px 16px 60px; }
+  .layout { display:flex; gap:18px; align-items:flex-start; }
+  .sidebar { flex:0 0 210px; background:#111a33; border:1px solid #1e2b4d;
+    border-radius:14px; padding:10px; position:sticky; top:16px; }
+  .side-title { font-size:.72rem; text-transform:uppercase; letter-spacing:.06em;
+    color:#6f7d97; padding:6px 8px; }
+  .side-item { display:flex; align-items:center; justify-content:space-between;
+    gap:8px; padding:10px 12px; border-radius:10px; cursor:pointer; font-weight:600;
+    font-size:.9rem; color:#cdd8f0; margin-bottom:2px; }
+  .side-item:hover { background:#182444; }
+  .side-item.active { background:#3b7bff; color:#fff; }
+  .side-item .dot { width:8px; height:8px; border-radius:50%; background:#7bd88f; flex:0 0 auto; }
+  .side-item.off .dot { background:#6f7d97; }
+  .editor { flex:1 1 auto; min-width:0; }
+  .panel { display:none; }
+  .panel.active { display:block; }
+  .side-add { width:100%; margin-top:8px; }
+  @media (max-width:720px){ .layout{ flex-direction:column; } .sidebar{ position:static; width:100%; flex-basis:auto; } }
   .msg { padding:10px 14px; border-radius:10px; margin:0 0 16px; font-size:.9rem; }
   .err { background:rgba(255,80,80,.15); border:1px solid rgba(255,80,80,.4); }
   .ok  { background:rgba(80,200,120,.15); border:1px solid rgba(80,200,120,.4); }
@@ -158,28 +185,32 @@ $token = csrf_token();
     <?php if ($error): ?><div class="msg err"><?php echo htmlspecialchars($error); ?></div><?php endif; ?>
     <?php if ($notice): ?><div class="msg ok"><?php echo htmlspecialchars($notice); ?></div><?php endif; ?>
 
-    <p style="font-size:.86rem;color:#a9b6ce;">
-      Each <b>rule</b> maps one or more <b>entry domains</b> (the links you hand out) to a
-      priority list of <b>target URLs</b>. Visitors to an entry domain are sent to the first
-      reachable target and skip any that are blocked.
-    </p>
-
     <form method="post" id="rulesForm">
       <input type="hidden" name="action" value="save" />
       <input type="hidden" name="csrf" value="<?php echo htmlspecialchars($token); ?>" />
       <input type="hidden" name="payload" id="payload" />
-      <div id="rules"></div>
-      <div class="bar">
-        <button type="button" class="ghost" id="addRule">+ Add rule</button>
-        <button type="submit" class="primary" id="saveBtn">Save all</button>
+
+      <div class="layout">
+        <aside class="sidebar">
+          <div class="side-title">Brands</div>
+          <div id="sideList"></div>
+          <button type="button" class="ghost side-add" id="addRule">+ Add</button>
+        </aside>
+
+        <section class="editor">
+          <div id="panels"></div>
+          <div class="bar">
+            <button type="submit" class="primary" id="saveBtn">Save all</button>
+          </div>
+        </section>
       </div>
     </form>
   </main>
 
   <template id="ruleTpl">
-    <div class="rule" data-id="">
+    <div class="rule panel" data-id="">
       <div class="head">
-        <input type="text" class="f-label" placeholder="Rule name (e.g. Wings365)" style="max-width:320px;" />
+        <input type="text" class="f-label" placeholder="Brand name" style="max-width:320px;" />
         <div style="display:flex;align-items:center;gap:12px;">
           <label class="toggle"><input type="checkbox" class="f-enabled" checked /> Enabled</label>
           <button type="button" class="danger f-remove">Remove</button>
@@ -193,7 +224,7 @@ $token = csrf_token();
         </div>
         <div class="col">
           <label>Target URLs (priority order, one per line)</label>
-          <textarea class="f-targets" placeholder="https://site-a.com&#10;https://site-b.net"></textarea>
+          <textarea class="f-targets" placeholder="https://your-site.com"></textarea>
           <div class="hint">First reachable one wins; blocked ones are skipped.</div>
         </div>
       </div>
@@ -211,29 +242,76 @@ $token = csrf_token();
         ];
     }, $rules), JSON_UNESCAPED_SLASHES); ?>;
 
-    var rulesEl = document.getElementById('rules');
+    var sideList = document.getElementById('sideList');
+    var panels = document.getElementById('panels');
     var tpl = document.getElementById('ruleTpl');
+    var seq = 0;
 
-    function addRule(r) {
-      r = r || { id:'', label:'', hosts:'', targets:'', enabled:true };
-      var node = tpl.content.firstElementChild.cloneNode(true);
-      node.dataset.id = r.id || '';
-      node.querySelector('.f-label').value = r.label || '';
-      node.querySelector('.f-hosts').value = r.hosts || '';
-      node.querySelector('.f-targets').value = r.targets || '';
-      node.querySelector('.f-enabled').checked = !!r.enabled;
-      node.querySelector('.f-remove').addEventListener('click', function () { node.remove(); });
-      rulesEl.appendChild(node);
+    function selectPanel(key) {
+      panels.querySelectorAll('.panel').forEach(function (p) {
+        p.classList.toggle('active', p.dataset.key === key);
+      });
+      sideList.querySelectorAll('.side-item').forEach(function (s) {
+        s.classList.toggle('active', s.dataset.key === key);
+      });
     }
 
-    INITIAL.forEach(addRule);
-    if (!INITIAL.length) addRule();
+    function addRule(r, select) {
+      r = r || { id:'', label:'', hosts:'', targets:'', enabled:true };
+      var key = 'k' + (seq++);
 
-    document.getElementById('addRule').addEventListener('click', function () { addRule(); });
+      var node = tpl.content.firstElementChild.cloneNode(true);
+      node.dataset.id = r.id || '';
+      node.dataset.key = key;
+      var labelInput = node.querySelector('.f-label');
+      var enabledInput = node.querySelector('.f-enabled');
+      labelInput.value = r.label || '';
+      node.querySelector('.f-hosts').value = r.hosts || '';
+      node.querySelector('.f-targets').value = r.targets || '';
+      enabledInput.checked = !!r.enabled;
+      panels.appendChild(node);
+
+      var item = document.createElement('div');
+      item.className = 'side-item' + (r.enabled ? '' : ' off');
+      item.dataset.key = key;
+      var left = document.createElement('span');
+      left.style.display = 'flex'; left.style.alignItems = 'center'; left.style.gap = '8px';
+      var dot = document.createElement('span'); dot.className = 'dot';
+      var name = document.createElement('span'); name.className = 'nm';
+      name.textContent = r.label || 'Untitled';
+      left.appendChild(dot); left.appendChild(name);
+      item.appendChild(left);
+      item.addEventListener('click', function () { selectPanel(key); });
+      sideList.appendChild(item);
+
+      labelInput.addEventListener('input', function () {
+        name.textContent = labelInput.value || 'Untitled';
+      });
+      enabledInput.addEventListener('change', function () {
+        item.classList.toggle('off', !enabledInput.checked);
+      });
+      node.querySelector('.f-remove').addEventListener('click', function () {
+        var wasActive = item.classList.contains('active');
+        node.remove(); item.remove();
+        if (wasActive) {
+          var first = sideList.querySelector('.side-item');
+          if (first) selectPanel(first.dataset.key);
+        }
+      });
+
+      if (select) selectPanel(key);
+    }
+
+    INITIAL.forEach(function (r) { addRule(r, false); });
+    if (!INITIAL.length) addRule(null, false);
+    var firstItem = sideList.querySelector('.side-item');
+    if (firstItem) selectPanel(firstItem.dataset.key);
+
+    document.getElementById('addRule').addEventListener('click', function () { addRule({ enabled:true }, true); });
 
     document.getElementById('rulesForm').addEventListener('submit', function () {
       var out = [];
-      rulesEl.querySelectorAll('.rule').forEach(function (n) {
+      panels.querySelectorAll('.panel').forEach(function (n) {
         out.push({
           id: n.dataset.id || '',
           label: n.querySelector('.f-label').value,
