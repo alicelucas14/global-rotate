@@ -200,7 +200,11 @@ function rotator_check_url($url) {
         CURLOPT_CONNECTTIMEOUT => 6,
         CURLOPT_SSL_VERIFYPEER => false,
         CURLOPT_SSL_VERIFYHOST => 0,
-        CURLOPT_USERAGENT      => 'Mozilla/5.0 (compatible; RotatorCheck/1.0)',
+        CURLOPT_USERAGENT      => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
+        CURLOPT_HTTPHEADER     => [
+            'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language: id-ID,id;q=0.9,en;q=0.8',
+        ],
     ]);
     $body  = curl_exec($ch);
     $errno = curl_errno($ch);
@@ -231,8 +235,17 @@ function rotator_check_url($url) {
     if ($http >= 200 && $http < 400) {
         return ['status' => 'clean', 'reason' => 'Reachable and clean (HTTP ' . $http . ')', 'http' => $http];
     }
-    if ($http >= 400) {
-        return ['status' => 'down', 'reason' => 'Site returned an error (HTTP ' . $http . ')', 'http' => $http];
+    if (in_array($http, [401, 403, 406, 429, 503], true)) {
+        return ['status' => 'clean', 'reason' => 'Reachable, but protected by anti-bot / WAF (HTTP ' . $http . ') — not blocked', 'http' => $http];
+    }
+    if ($http === 404 || $http === 410) {
+        return ['status' => 'down', 'reason' => 'Page not found (HTTP ' . $http . ')', 'http' => $http];
+    }
+    if ($http >= 500) {
+        return ['status' => 'down', 'reason' => 'Site error (HTTP ' . $http . ')', 'http' => $http];
+    }
+    if ($http > 0) {
+        return ['status' => 'clean', 'reason' => 'Reachable (HTTP ' . $http . ')', 'http' => $http];
     }
     return ['status' => 'down', 'reason' => 'No response from server', 'http' => $http];
 }
