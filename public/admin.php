@@ -303,14 +303,14 @@ $current_user = rotator_auth_user();
       </div>
       <div class="row">
         <div class="col">
-          <label>Entry domains (one per line — the links you give out)</label>
-          <textarea class="f-hosts" placeholder="domains-rotate.store"></textarea>
-          <div class="hint">Leave empty to make this the default for any unmatched domain.</div>
+          <label>Link players open (your entry domain)</label>
+          <textarea class="f-hosts" placeholder="gold888id.com"></textarea>
+          <div class="hint">The stable link you hand to players. Must point to this server. Leave empty to use the built-in link below.</div>
         </div>
         <div class="col">
-          <label>Target URLs (priority order, one per line)</label>
-          <textarea class="f-targets" placeholder="https://your-site.com"></textarea>
-          <div class="hint">First reachable one wins; blocked ones are skipped.</div>
+          <label>Backup game domains — rotates when blocked (top = first choice)</label>
+          <textarea class="f-targets" placeholder="gamegold888.cyou&#10;gamegold888.icu&#10;gold888a.cyou"></textarea>
+          <div class="hint">Players are sent to the first one that works; blocked ones are skipped automatically.</div>
         </div>
       </div>
       <div style="margin-top:14px;">
