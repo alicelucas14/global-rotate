@@ -4,6 +4,31 @@ require __DIR__ . '/rotator_lib.php';
 
 session_start();
 
+function rotator_auth_path() {
+    return __DIR__ . '/../rotator-auth.json';
+}
+function rotator_auth_load() {
+    $p = rotator_auth_path();
+    if (!file_exists($p)) return null;
+    $d = json_decode(@file_get_contents($p), true);
+    return (is_array($d) && isset($d['user'], $d['hash'])) ? $d : null;
+}
+function rotator_auth_user() {
+    $a = rotator_auth_load();
+    return $a ? $a['user'] : ADMIN_USER;
+}
+function rotator_auth_verify($user, $pass) {
+    $a = rotator_auth_load();
+    if ($a) {
+        return hash_equals($a['user'], (string)$user) && password_verify((string)$pass, $a['hash']);
+    }
+    return hash_equals(ADMIN_USER, (string)$user) && hash_equals(ADMIN_PASS, (string)$pass);
+}
+function rotator_auth_save($user, $pass) {
+    $d = ['user' => $user, 'hash' => password_hash($pass, PASSWORD_DEFAULT)];
+    return @file_put_contents(rotator_auth_path(), json_encode($d), LOCK_EX) !== false;
+}
+
 function is_logged_in() {
     return !empty($_SESSION['rotator_admin']);
 }
@@ -35,12 +60,39 @@ if ($action === 'logout') {
 if ($action === 'login') {
     $u = $_POST['username'] ?? '';
     $p = $_POST['password'] ?? '';
-    if (hash_equals(ADMIN_USER, $u) && hash_equals(ADMIN_PASS, $p)) {
+    if (rotator_auth_verify($u, $p)) {
         session_regenerate_id(true);
         $_SESSION['rotator_admin'] = true;
+        $_SESSION['rotator_user'] = $u;
     } else {
         usleep(400000); // small delay on failure
         $error = 'Invalid username or password.';
+    }
+}
+
+// ---- Update admin account ----
+if ($action === 'account' && is_logged_in()) {
+    if (!check_csrf()) {
+        $error = 'Session expired, please try again.';
+    } else {
+        $cur     = $_POST['current'] ?? '';
+        $newUser = trim($_POST['new_user'] ?? '');
+        $newPass = (string)($_POST['new_pass'] ?? '');
+        $confirm = (string)($_POST['confirm'] ?? '');
+        if (!rotator_auth_verify(rotator_auth_user(), $cur)) {
+            $error = 'Current password is incorrect.';
+        } elseif ($newUser === '') {
+            $error = 'Username cannot be empty.';
+        } elseif (strlen($newPass) < 6) {
+            $error = 'New password must be at least 6 characters.';
+        } elseif ($newPass !== $confirm) {
+            $error = 'New passwords do not match.';
+        } elseif (rotator_auth_save($newUser, $newPass)) {
+            $_SESSION['rotator_user'] = $newUser;
+            $notice = 'Account updated. Use your new username and password next time you log in.';
+        } else {
+            $error = 'Could not save account file (check permissions on the site root folder).';
+        }
     }
 }
 
@@ -100,6 +152,7 @@ if (empty($rules)) {
 }
 
 $token = csrf_token();
+$current_user = rotator_auth_user();
 ?><!doctype html>
 <html lang="en">
 <head>
@@ -186,26 +239,45 @@ $token = csrf_token();
     <?php if ($error): ?><div class="msg err"><?php echo htmlspecialchars($error); ?></div><?php endif; ?>
     <?php if ($notice): ?><div class="msg ok"><?php echo htmlspecialchars($notice); ?></div><?php endif; ?>
 
-    <form method="post" id="rulesForm">
-      <input type="hidden" name="action" value="save" />
-      <input type="hidden" name="csrf" value="<?php echo htmlspecialchars($token); ?>" />
-      <input type="hidden" name="payload" id="payload" />
+    <div class="layout">
+      <aside class="sidebar">
+        <div class="side-title">Brands</div>
+        <div id="sideList"></div>
+        <button type="button" class="ghost side-add" id="addRule">+ Add</button>
+        <div class="side-title" style="margin-top:14px;">Settings</div>
+        <div class="side-item" id="sideAccount">
+          <span style="display:flex;align-items:center;gap:8px;"><span class="dot" style="background:#f0c674;"></span><span>Account</span></span>
+        </div>
+      </aside>
 
-      <div class="layout">
-        <aside class="sidebar">
-          <div class="side-title">Brands</div>
-          <div id="sideList"></div>
-          <button type="button" class="ghost side-add" id="addRule">+ Add</button>
-        </aside>
-
-        <section class="editor">
+      <section class="editor">
+        <form method="post" id="rulesForm">
+          <input type="hidden" name="action" value="save" />
+          <input type="hidden" name="csrf" value="<?php echo htmlspecialchars($token); ?>" />
+          <input type="hidden" name="payload" id="payload" />
           <div id="panels"></div>
           <div class="bar">
             <button type="submit" class="primary" id="saveBtn">Save all</button>
           </div>
-        </section>
-      </div>
-    </form>
+        </form>
+
+        <form method="post" id="accountForm" class="rule panel" data-key="account">
+          <input type="hidden" name="action" value="account" />
+          <input type="hidden" name="csrf" value="<?php echo htmlspecialchars($token); ?>" />
+          <h2 style="margin:0 0 4px;font-size:1rem;">Admin account</h2>
+          <p class="hint" style="margin:0 0 12px;">Change the username and password you use to log in to this panel.</p>
+          <label>Username</label>
+          <input type="text" name="new_user" value="<?php echo htmlspecialchars($current_user); ?>" style="max-width:340px;" autocomplete="username" />
+          <label>Current password</label>
+          <input type="password" name="current" style="max-width:340px;" autocomplete="current-password" />
+          <label>New password (at least 6 characters)</label>
+          <input type="password" name="new_pass" style="max-width:340px;" autocomplete="new-password" />
+          <label>Confirm new password</label>
+          <input type="password" name="confirm" style="max-width:340px;" autocomplete="new-password" />
+          <div class="bar"><button type="submit" class="primary">Update account</button></div>
+        </form>
+      </section>
+    </div>
   </main>
 
   <template id="ruleTpl">
@@ -254,16 +326,25 @@ $token = csrf_token();
     var sideList = document.getElementById('sideList');
     var panels = document.getElementById('panels');
     var tpl = document.getElementById('ruleTpl');
+    var rulesForm = document.getElementById('rulesForm');
+    var accountForm = document.getElementById('accountForm');
+    var sideAccount = document.getElementById('sideAccount');
     var seq = 0;
 
     function selectPanel(key) {
+      var isAccount = (key === 'account');
+      rulesForm.style.display = isAccount ? 'none' : 'block';
       panels.querySelectorAll('.panel').forEach(function (p) {
-        p.classList.toggle('active', p.dataset.key === key);
+        p.classList.toggle('active', !isAccount && p.dataset.key === key);
       });
+      accountForm.classList.toggle('active', isAccount);
       sideList.querySelectorAll('.side-item').forEach(function (s) {
         s.classList.toggle('active', s.dataset.key === key);
       });
+      sideAccount.classList.toggle('active', isAccount);
     }
+
+    sideAccount.addEventListener('click', function () { selectPanel('account'); });
 
     function addRule(r, select) {
       r = r || { id:'', label:'', hosts:'', targets:'', enabled:true };
