@@ -397,6 +397,15 @@ $current_user = rotator_auth_user();
       }).catch(function(){}).then(function(){ checkBtn.textContent = 'Run check now'; });
     });
 
+    // Auto-dismiss the "Saved successfully" / error banners.
+    setTimeout(function(){
+      document.querySelectorAll('.msg').forEach(function(m){
+        m.style.transition = 'opacity .4s';
+        m.style.opacity = '0';
+        setTimeout(function(){ if (m.parentNode) m.parentNode.removeChild(m); }, 400);
+      });
+    }, 4000);
+
     function addRule(r, select) {
       r = r || { id:'', label:'', hosts:'', targets:'', enabled:true };
       var key = 'k' + (seq++);
