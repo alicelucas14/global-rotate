@@ -149,3 +149,111 @@ function rotator_stats_save($d) {
     $p = rotator_stats_path();
     return @file_put_contents($p, json_encode($d, JSON_UNESCAPED_SLASHES), LOCK_EX) !== false;
 }
+
+/* ---- Automatic health/block checks (run by cron or on demand) ---- */
+
+function rotator_checks_path() {
+    return __DIR__ . '/../rotator-checks.json';
+}
+function rotator_checks_load() {
+    $p = rotator_checks_path();
+    if (!file_exists($p)) return [];
+    $d = json_decode(@file_get_contents($p), true);
+    return is_array($d) ? $d : [];
+}
+function rotator_checks_save($d) {
+    return @file_put_contents(rotator_checks_path(), json_encode($d, JSON_UNESCAPED_SLASHES), LOCK_EX) !== false;
+}
+
+/**
+ * Check a single URL and classify it:
+ *   clean   - reachable and not a block page
+ *   blocked - reached an Internet Positif / Trust+ notice, or connection blocked
+ *   down    - DNS doesn't resolve, or the site returns an error
+ * Returns ['status'=>..., 'reason'=>..., 'http'=>int].
+ */
+function rotator_check_url($url) {
+    $url = rotator_norm_url($url);
+    if ($url === '') return ['status' => 'down', 'reason' => 'Invalid URL', 'http' => 0];
+
+    $host = parse_url($url, PHP_URL_HOST);
+    if (!$host) return ['status' => 'down', 'reason' => 'Invalid URL', 'http' => 0];
+
+    // 1. DNS resolution
+    $ips = @gethostbynamel($host);
+    if (!$ips) {
+        return ['status' => 'down', 'reason' => 'Domain does not resolve (DNS / NXDOMAIN)', 'http' => 0];
+    }
+
+    if (!function_exists('curl_init')) {
+        // Fallback: DNS resolved, assume reachable.
+        return ['status' => 'clean', 'reason' => 'Resolves (no HTTP check available)', 'http' => 0];
+    }
+
+    // 2. HTTP fetch (follow redirects, grab a body sample)
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_MAXREDIRS      => 5,
+        CURLOPT_TIMEOUT        => 10,
+        CURLOPT_CONNECTTIMEOUT => 6,
+        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_SSL_VERIFYHOST => 0,
+        CURLOPT_USERAGENT      => 'Mozilla/5.0 (compatible; RotatorCheck/1.0)',
+    ]);
+    $body  = curl_exec($ch);
+    $errno = curl_errno($ch);
+    $http  = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $final = (string)curl_getinfo($ch, CURLINFO_EFFECTIVE_URL);
+    curl_close($ch);
+
+    if ($errno) {
+        $reason = ($errno === 28)
+            ? 'Connection timed out (often an ISP block or the site is offline)'
+            : 'Connection failed (reset/refused — possible block)';
+        return ['status' => 'blocked', 'reason' => $reason, 'http' => 0];
+    }
+
+    // 3. Block-page detection (Internet Positif / Trust+ / ISP notices)
+    $hay = strtolower($final . ' ' . substr((string)$body, 0, 5000));
+    $markers = [
+        'internetpositif', 'internet positif', 'trustpositif', 'trust+positif',
+        'aduankonten', 'diblokir', 'pemblokiran', 'komdigi', 'kominfo', 'nawala',
+        'laman ini diblokir', 'situs yang anda kunjungi', 'newkominfo', 'positifme'
+    ];
+    foreach ($markers as $m) {
+        if (strpos($hay, $m) !== false) {
+            return ['status' => 'blocked', 'reason' => 'Redirected to an Internet Positif / Trust+ block notice', 'http' => $http];
+        }
+    }
+
+    if ($http >= 200 && $http < 400) {
+        return ['status' => 'clean', 'reason' => 'Reachable and clean (HTTP ' . $http . ')', 'http' => $http];
+    }
+    if ($http >= 400) {
+        return ['status' => 'down', 'reason' => 'Site returned an error (HTTP ' . $http . ')', 'http' => $http];
+    }
+    return ['status' => 'down', 'reason' => 'No response from server', 'http' => $http];
+}
+
+/** Check every enabled brand's target URLs and persist the results. */
+function rotator_run_checks() {
+    $data   = rotator_load();
+    $checks = [];
+    foreach ($data['rules'] as $rule) {
+        if (empty($rule['enabled'])) continue;
+        $slug = rotator_slug($rule['slug'] ?? $rule['label'] ?? '');
+        if ($slug === '') continue;
+        $checks[$slug] = [];
+        foreach (($rule['targets'] ?? []) as $t) {
+            $u = rotator_norm_url($t);
+            if ($u === '') continue;
+            $r = rotator_check_url($u);
+            $r['ts'] = gmdate('c');
+            $checks[$slug][$u] = $r;
+        }
+    }
+    rotator_checks_save($checks);
+    return $checks;
+}

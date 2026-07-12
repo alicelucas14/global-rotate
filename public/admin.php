@@ -213,8 +213,10 @@ $current_user = rotator_auth_user();
   .hint { font-size:.72rem; color:#6f7d97; margin-top:4px; }
   .status-head { font-size:.82rem; color:#a9b6ce; margin-top:16px; font-weight:600; }
   .status-list { margin-top:6px; }
-  .st-row { display:flex; align-items:center; gap:10px; padding:7px 0; border-top:1px solid #1c2848; font-size:.85rem; }
-  .st-url { flex:1 1 auto; color:#cdd8f0; word-break:break-all; }
+  .st-row { display:flex; align-items:flex-start; gap:10px; padding:8px 0; border-top:1px solid #1c2848; font-size:.85rem; }
+  .st-mid { flex:1 1 auto; min-width:0; }
+  .st-url { color:#cdd8f0; word-break:break-all; }
+  .st-reason { font-size:.72rem; color:#8492ad; margin-top:2px; }
   .st-when { color:#6f7d97; font-size:.74rem; flex:0 0 auto; }
   .badge { font-size:.66rem; font-weight:700; letter-spacing:.04em; padding:3px 9px; border-radius:20px; flex:0 0 auto; }
   .badge.act { background:rgba(80,200,120,.2); color:#7bd88f; }
@@ -269,6 +271,7 @@ $current_user = rotator_auth_user();
           <div id="panels"></div>
           <div class="bar">
             <button type="submit" class="primary" id="saveBtn">Save all</button>
+            <button type="button" class="ghost" id="checkBtn">Run check now</button>
             <button type="button" class="ghost" id="refreshBtn">&#8635; Refresh status</button>
           </div>
         </form>
@@ -304,12 +307,12 @@ $current_user = rotator_auth_user();
       <div class="row">
         <div class="col">
           <label>Link players open (your entry domain)</label>
-          <textarea class="f-hosts" placeholder="gold888id.com"></textarea>
+          <textarea class="f-hosts" placeholder="yourlink.com"></textarea>
           <div class="hint">The stable link you hand to players. Must point to this server. Leave empty to use the built-in link below.</div>
         </div>
         <div class="col">
           <label>Backup game domains — rotates when blocked (top = first choice)</label>
-          <textarea class="f-targets" placeholder="gamegold888.cyou&#10;gamegold888.icu&#10;gold888a.cyou"></textarea>
+          <textarea class="f-targets" placeholder="site1.com&#10;site2.com&#10;site3.com"></textarea>
           <div class="hint">Players are sent to the first one that works; blocked ones are skipped automatically.</div>
         </div>
       </div>
@@ -321,9 +324,9 @@ $current_user = rotator_auth_user();
         </div>
         <div class="hint">Give this link to players for this brand. Or point a dedicated entry domain at it using the Entry domains box above-left.</div>
       </div>
-      <div class="status-head">Live status (from real visitors)</div>
+      <div class="status-head">Live status (auto-checked + real visitors)</div>
       <div class="status-list"></div>
-      <div class="hint">IN USE = currently serving players &middot; BLOCKED = players couldn't reach it &middot; WAITING = backup, not needed yet. Click “Refresh status” to update.</div>
+      <div class="hint">CLEAN = reachable &middot; BLOCKED = blocked in Indonesia &middot; DOWN = dead/error &middot; IN USE = currently serving players. The system checks automatically; click “Run check now” for an instant check.</div>
     </div>
   </template>
 
@@ -339,6 +342,7 @@ $current_user = rotator_auth_user();
     }, $rules), JSON_UNESCAPED_SLASHES); ?>;
 
     var STATS = <?php echo json_encode(rotator_stats_load(), JSON_UNESCAPED_SLASHES); ?>;
+    var CHECKS = <?php echo json_encode(rotator_checks_load(), JSON_UNESCAPED_SLASHES); ?>;
     var renderers = [];
     function norm(u){ return String(u||'').trim().replace(/\/+$/,''); }
     function timeAgo(iso){
@@ -378,9 +382,19 @@ $current_user = rotator_auth_user();
     if (refreshBtn) refreshBtn.addEventListener('click', function(){
       refreshBtn.textContent = 'Refreshing…';
       fetch('status.php', { cache:'no-store' }).then(function(r){ return r.json(); }).then(function(j){
-        STATS = j || {};
+        STATS = (j && j.stats) || {};
+        CHECKS = (j && j.checks) || {};
         renderers.forEach(function(fn){ fn(); });
       }).catch(function(){}).then(function(){ refreshBtn.innerHTML = '&#8635; Refresh status'; });
+    });
+
+    var checkBtn = document.getElementById('checkBtn');
+    if (checkBtn) checkBtn.addEventListener('click', function(){
+      checkBtn.textContent = 'Checking…';
+      fetch('checker.php', { cache:'no-store' }).then(function(r){ return r.json(); }).then(function(j){
+        CHECKS = j || {};
+        renderers.forEach(function(fn){ fn(); });
+      }).catch(function(){}).then(function(){ checkBtn.textContent = 'Run check now'; });
     });
 
     function addRule(r, select) {
@@ -423,19 +437,34 @@ $current_user = rotator_auth_user();
       var statusBox = node.querySelector('.status-list');
       function renderStatus(){
         var slug = slugify(labelInput.value);
-        var s = (STATS && STATS[slug]) || {};
+        var vs = (STATS && STATS[slug]) || {};
+        var ck = (CHECKS && CHECKS[slug]) || {};
         var targets = (node.querySelector('.f-targets').value || '').split(/\r?\n/).map(norm).filter(Boolean);
         statusBox.innerHTML = '';
         if (!targets.length){ statusBox.innerHTML = '<div class="hint">No targets yet — add some and Save.</div>'; return; }
         targets.forEach(function(u){
-          var st = s[u]; var cls='wait', txt='WAITING';
-          if (st && st.status==='active'){ cls='act'; txt='IN USE'; }
-          else if (st && st.status==='blocked'){ cls='blk'; txt='BLOCKED'; }
+          var c = ck[u]; var v = vs[u];
+          var cls='wait', txt='NOT CHECKED', reason='Not checked yet', when='';
+          if (c){
+            when = 'checked ' + timeAgo(c.ts);
+            reason = c.reason || '';
+            if (c.status==='clean'){ cls='act'; txt='CLEAN'; }
+            else if (c.status==='blocked'){ cls='blk'; txt='BLOCKED'; }
+            else { cls='wait'; txt='DOWN'; }
+          } else if (v){
+            when = timeAgo(v.ts);
+            if (v.status==='active'){ cls='act'; txt='CLEAN'; reason='Served to players'; }
+            else if (v.status==='blocked'){ cls='blk'; txt='BLOCKED'; reason='A visitor could not reach it'; }
+          }
+          var inUse = (v && v.status==='active');
           var row=document.createElement('div'); row.className='st-row';
           var badge=document.createElement('span'); badge.className='badge '+cls; badge.textContent=txt;
-          var url=document.createElement('span'); url.className='st-url'; url.textContent=u.replace(/^https?:\/\//,'');
-          var when=document.createElement('span'); when.className='st-when'; when.textContent = st ? timeAgo(st.ts) : '';
-          row.appendChild(badge); row.appendChild(url); row.appendChild(when);
+          var mid=document.createElement('div'); mid.className='st-mid';
+          var urlEl=document.createElement('div'); urlEl.className='st-url'; urlEl.textContent=u.replace(/^https?:\/\//,'');
+          var reasonEl=document.createElement('div'); reasonEl.className='st-reason'; reasonEl.textContent = reason + (when?(' · '+when):'');
+          mid.appendChild(urlEl); mid.appendChild(reasonEl);
+          row.appendChild(badge); row.appendChild(mid);
+          if (inUse){ var tag=document.createElement('span'); tag.className='badge'; tag.style.background='rgba(91,157,255,.2)'; tag.style.color='#9cc0ff'; tag.textContent='IN USE'; row.appendChild(tag); }
           statusBox.appendChild(row);
         });
       }

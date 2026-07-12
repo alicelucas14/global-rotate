@@ -13,4 +13,7 @@ if (empty($_SESSION['rotator_admin'])) {
     echo '{}';
     exit;
 }
-echo json_encode(rotator_stats_load(), JSON_UNESCAPED_SLASHES);
+echo json_encode([
+    'stats'  => rotator_stats_load(),
+    'checks' => rotator_checks_load(),
+], JSON_UNESCAPED_SLASHES);

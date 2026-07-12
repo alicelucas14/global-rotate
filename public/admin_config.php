@@ -7,3 +7,6 @@
  */
 define('ADMIN_USER', 'Global-101');
 define('ADMIN_PASS', 'ChangeThisPassword!'); // <-- change me on the server
+
+// Secret key for the automatic checker cron (change this on the server).
+define('CHECK_KEY', 'change-this-cron-key');
