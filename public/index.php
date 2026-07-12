@@ -21,6 +21,7 @@ if (!$rule) {
 }
 
 $targets = rotator_rule_targets($rule);
+$ruleSlug = $rule ? rotator_slug($rule['slug'] ?? $rule['label'] ?? '') : '';
 ?><!doctype html>
 <html lang="id">
 <head>
@@ -74,6 +75,20 @@ $targets = rotator_rule_targets($rule);
   (function () {
     // Targets for THIS entry domain, injected by PHP from the admin panel.
     var CANDIDATES = <?php echo json_encode($targets, JSON_UNESCAPED_SLASHES); ?>;
+    var BRAND = <?php echo json_encode($ruleSlug, JSON_UNESCAPED_SLASHES); ?>;
+
+    // Tell the admin which target we used and which we had to skip.
+    function report(activeUrl, blockedList) {
+      if (!BRAND) return;
+      try {
+        var d = new URLSearchParams();
+        d.set('b', BRAND);
+        if (activeUrl) d.set('active', activeUrl);
+        (blockedList || []).forEach(function (u) { d.append('blocked', u); });
+        if (navigator.sendBeacon) navigator.sendBeacon('/report.php', d);
+        else fetch('/report.php', { method: 'POST', body: d, keepalive: true });
+      } catch (e) {}
+    }
 
     var TIMEOUT_MS = 3500;
     var LAST_GOOD_KEY = 'rotator_last_good_' + location.hostname;
@@ -130,12 +145,15 @@ $targets = rotator_rule_targets($rule);
       var last = null;
       try { last = localStorage.getItem(LAST_GOOD_KEY); } catch (e) {}
       if (last && list.indexOf(last) !== -1) {
-        if (await reachable(last)) return go(last);
+        if (await reachable(last)) { report(last, []); return go(last); }
       }
+      var blocked = [];
       for (var i = 0; i < list.length; i++) {
         // eslint-disable-next-line no-await-in-loop
-        if (await reachable(list[i])) return go(list[i]);
+        if (await reachable(list[i])) { report(list[i], blocked); return go(list[i]); }
+        blocked.push(list[i]);
       }
+      report('', blocked);
       showManual(list);
     }
 

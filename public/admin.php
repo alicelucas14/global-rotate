@@ -209,6 +209,15 @@ $current_user = rotator_auth_user();
   .toggle { display:flex; align-items:center; gap:7px; font-size:.82rem; color:#a9b6ce; }
   .bar { display:flex; gap:10px; margin-top:18px; }
   .hint { font-size:.72rem; color:#6f7d97; margin-top:4px; }
+  .status-head { font-size:.82rem; color:#a9b6ce; margin-top:16px; font-weight:600; }
+  .status-list { margin-top:6px; }
+  .st-row { display:flex; align-items:center; gap:10px; padding:7px 0; border-top:1px solid #1c2848; font-size:.85rem; }
+  .st-url { flex:1 1 auto; color:#cdd8f0; word-break:break-all; }
+  .st-when { color:#6f7d97; font-size:.74rem; flex:0 0 auto; }
+  .badge { font-size:.66rem; font-weight:700; letter-spacing:.04em; padding:3px 9px; border-radius:20px; flex:0 0 auto; }
+  .badge.act { background:rgba(80,200,120,.2); color:#7bd88f; }
+  .badge.blk { background:rgba(255,80,80,.2); color:#ff9b9b; }
+  .badge.wait { background:#1e2b4d; color:#9fb0d0; }
   a.link { color:#7fa8ff; }
 </style>
 </head>
@@ -258,6 +267,7 @@ $current_user = rotator_auth_user();
           <div id="panels"></div>
           <div class="bar">
             <button type="submit" class="primary" id="saveBtn">Save all</button>
+            <button type="button" class="ghost" id="refreshBtn">&#8635; Refresh status</button>
           </div>
         </form>
 
@@ -309,6 +319,9 @@ $current_user = rotator_auth_user();
         </div>
         <div class="hint">Give this link to players for this brand. Or point a dedicated entry domain at it using the Entry domains box above-left.</div>
       </div>
+      <div class="status-head">Live status (from real visitors)</div>
+      <div class="status-list"></div>
+      <div class="hint">IN USE = currently serving players &middot; BLOCKED = players couldn't reach it &middot; WAITING = backup, not needed yet. Click “Refresh status” to update.</div>
     </div>
   </template>
 
@@ -322,6 +335,19 @@ $current_user = rotator_auth_user();
           'enabled' => !empty($r['enabled']),
         ];
     }, $rules), JSON_UNESCAPED_SLASHES); ?>;
+
+    var STATS = <?php echo json_encode(rotator_stats_load(), JSON_UNESCAPED_SLASHES); ?>;
+    var renderers = [];
+    function norm(u){ return String(u||'').trim().replace(/\/+$/,''); }
+    function timeAgo(iso){
+      if(!iso) return '';
+      var t = Date.parse(iso); if(isNaN(t)) return '';
+      var s = Math.floor((Date.now()-t)/1000);
+      if(s<60) return s+'s ago';
+      if(s<3600) return Math.floor(s/60)+'m ago';
+      if(s<86400) return Math.floor(s/3600)+'h ago';
+      return Math.floor(s/86400)+'d ago';
+    }
 
     var sideList = document.getElementById('sideList');
     var panels = document.getElementById('panels');
@@ -345,6 +371,15 @@ $current_user = rotator_auth_user();
     }
 
     sideAccount.addEventListener('click', function () { selectPanel('account'); });
+
+    var refreshBtn = document.getElementById('refreshBtn');
+    if (refreshBtn) refreshBtn.addEventListener('click', function(){
+      refreshBtn.textContent = 'Refreshing…';
+      fetch('status.php', { cache:'no-store' }).then(function(r){ return r.json(); }).then(function(j){
+        STATS = j || {};
+        renderers.forEach(function(fn){ fn(); });
+      }).catch(function(){}).then(function(){ refreshBtn.innerHTML = '&#8635; Refresh status'; });
+    });
 
     function addRule(r, select) {
       r = r || { id:'', label:'', hosts:'', targets:'', enabled:true };
@@ -383,9 +418,32 @@ $current_user = rotator_auth_user();
         try { navigator.clipboard.writeText(linkInput.value); } catch(e){ try { document.execCommand('copy'); } catch(_){} }
       });
 
+      var statusBox = node.querySelector('.status-list');
+      function renderStatus(){
+        var slug = slugify(labelInput.value);
+        var s = (STATS && STATS[slug]) || {};
+        var targets = (node.querySelector('.f-targets').value || '').split(/\r?\n/).map(norm).filter(Boolean);
+        statusBox.innerHTML = '';
+        if (!targets.length){ statusBox.innerHTML = '<div class="hint">No targets yet — add some and Save.</div>'; return; }
+        targets.forEach(function(u){
+          var st = s[u]; var cls='wait', txt='WAITING';
+          if (st && st.status==='active'){ cls='act'; txt='IN USE'; }
+          else if (st && st.status==='blocked'){ cls='blk'; txt='BLOCKED'; }
+          var row=document.createElement('div'); row.className='st-row';
+          var badge=document.createElement('span'); badge.className='badge '+cls; badge.textContent=txt;
+          var url=document.createElement('span'); url.className='st-url'; url.textContent=u.replace(/^https?:\/\//,'');
+          var when=document.createElement('span'); when.className='st-when'; when.textContent = st ? timeAgo(st.ts) : '';
+          row.appendChild(badge); row.appendChild(url); row.appendChild(when);
+          statusBox.appendChild(row);
+        });
+      }
+      renderStatus();
+      renderers.push(renderStatus);
+
       labelInput.addEventListener('input', function () {
         name.textContent = labelInput.value || 'Untitled';
         updateLink();
+        renderStatus();
       });
       enabledInput.addEventListener('change', function () {
         item.classList.toggle('off', !enabledInput.checked);

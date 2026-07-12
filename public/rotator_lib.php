@@ -131,3 +131,21 @@ function rotator_first_enabled($data) {
     }
     return null;
 }
+
+/* ---- Live status stats (what visitors' browsers actually saw) ---- */
+
+function rotator_stats_path() {
+    return __DIR__ . '/../rotator-stats.json';
+}
+
+function rotator_stats_load() {
+    $p = rotator_stats_path();
+    if (!file_exists($p)) return [];
+    $d = json_decode(@file_get_contents($p), true);
+    return is_array($d) ? $d : [];
+}
+
+function rotator_stats_save($d) {
+    $p = rotator_stats_path();
+    return @file_put_contents($p, json_encode($d, JSON_UNESCAPED_SLASHES), LOCK_EX) !== false;
+}
