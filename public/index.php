@@ -90,27 +90,30 @@ $ruleSlug = $rule ? rotator_slug($rule['slug'] ?? $rule['label'] ?? '') : '';
       } catch (e) {}
     }
 
-    var TIMEOUT_MS = 3500;
+    var TIMEOUT_MS = 6000;
     var LAST_GOOD_KEY = 'rotator_last_good_' + location.hostname;
 
     function norm(u) { return String(u || '').trim().replace(/\/+$/, ''); }
 
-    // reachable -> fetch resolves; dead/DNS -> rejects fast; blocked -> times out.
-    function reachable(url) {
+    // probe -> 'ok'      : reachable
+    //          'reject'  : DNS/connection failure (real block or dead domain)
+    //          'timeout' : no answer in time (ambiguous: slow site / Cloudflare)
+    function probe(url) {
       var target = norm(url) + '/favicon.ico?_r=' + Date.now();
       if (typeof fetch === 'function' && typeof AbortController === 'function') {
         var ctrl = new AbortController();
-        var timer = setTimeout(function () { ctrl.abort(); }, TIMEOUT_MS);
+        var aborted = false;
+        var timer = setTimeout(function () { aborted = true; ctrl.abort(); }, TIMEOUT_MS);
         return fetch(target, { mode: 'no-cors', cache: 'no-store', signal: ctrl.signal })
-          .then(function () { clearTimeout(timer); return true; })
-          .catch(function () { clearTimeout(timer); return false; });
+          .then(function () { clearTimeout(timer); return 'ok'; })
+          .catch(function () { clearTimeout(timer); return aborted ? 'timeout' : 'reject'; });
       }
       return new Promise(function (resolve) {
         var done = false;
         var img = new Image();
-        var timer = setTimeout(function () { if (!done) { done = true; resolve(false); } }, TIMEOUT_MS);
-        img.onload = function () { if (!done) { done = true; clearTimeout(timer); resolve(true); } };
-        img.onerror = function () { if (!done) { done = true; clearTimeout(timer); resolve(false); } };
+        var timer = setTimeout(function () { if (!done) { done = true; resolve('timeout'); } }, TIMEOUT_MS);
+        img.onload = function () { if (!done) { done = true; clearTimeout(timer); resolve('ok'); } };
+        img.onerror = function () { if (!done) { done = true; clearTimeout(timer); resolve('reject'); } };
         img.src = target;
       });
     }
@@ -145,15 +148,19 @@ $ruleSlug = $rule ? rotator_slug($rule['slug'] ?? $rule['label'] ?? '') : '';
       var last = null;
       try { last = localStorage.getItem(LAST_GOOD_KEY); } catch (e) {}
       if (last && list.indexOf(last) !== -1) {
-        if (await reachable(last)) { report(last, []); return go(last); }
+        if (await probe(last) === 'ok') { report(last, []); return go(last); }
       }
-      var blocked = [];
+      // Only DEFINITIVE failures (DNS/connection reject) are reported as blocked.
+      // Timeouts are ambiguous (slow / Cloudflare) so we skip them for the redirect
+      // but do NOT report them as blocked, to avoid false "blocked" alarms.
+      var rejected = [];
       for (var i = 0; i < list.length; i++) {
         // eslint-disable-next-line no-await-in-loop
-        if (await reachable(list[i])) { report(list[i], blocked); return go(list[i]); }
-        blocked.push(list[i]);
+        var st = await probe(list[i]);
+        if (st === 'ok') { report(list[i], rejected); return go(list[i]); }
+        if (st === 'reject') rejected.push(list[i]);
       }
-      report('', blocked);
+      report('', rejected);
       showManual(list);
     }
 

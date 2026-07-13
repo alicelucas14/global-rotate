@@ -461,13 +461,14 @@ $current_user = rotator_auth_user();
         targets.forEach(function(u, idx){
           var c = ck[u]; var v = vs[u];
           var key='unknown', cls='wait', txt='NOT CHECKED', reason='Not checked yet', when='';
-          // A real visitor "blocked" is authoritative (ISP blocks aren't always
-          // visible to the server), then checks, then visitor "active".
-          if (v && v.status==='blocked'){ key='blocked'; cls='blk'; txt='BLOCKED'; reason='Reported blocked in Indonesia'; when=timeAgo(v.ts); }
+          // Server check is primary (clean = domain resolves and responds). A single
+          // visitor timeout is unreliable for Cloudflare sites, so it can't override a
+          // clean check — this prevents false "blocked" alarms.
+          if (c && c.status==='clean'){ key='clean'; cls='act'; txt='CLEAN'; reason=c.reason||''; when='checked '+timeAgo(c.ts); }
           else if (c && c.status==='blocked'){ key='blocked'; cls='blk'; txt='BLOCKED'; reason=c.reason||''; when='checked '+timeAgo(c.ts); }
           else if (c && c.status==='down'){ key='down'; cls='wait'; txt='DOWN'; reason=c.reason||''; when='checked '+timeAgo(c.ts); }
           else if (v && v.status==='active'){ key='clean'; cls='act'; txt='CLEAN'; reason='Serving players'; when=timeAgo(v.ts); }
-          else if (c && c.status==='clean'){ key='clean'; cls='act'; txt='CLEAN'; reason=c.reason||''; when='checked '+timeAgo(c.ts); }
+          else if (v && v.status==='blocked'){ key='blocked'; cls='blk'; txt='BLOCKED'; reason='Reported blocked by a visitor'; when=timeAgo(v.ts); }
           var inUse = (v && v.status==='active');
           if (idx===0) firstKey = key;
           var row=document.createElement('div'); row.className='st-row';
