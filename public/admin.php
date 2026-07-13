@@ -181,6 +181,9 @@ $current_user = rotator_auth_user();
   .side-item.active { background:#3b7bff; color:#fff; }
   .side-item .dot { width:8px; height:8px; border-radius:50%; background:#7bd88f; flex:0 0 auto; }
   .side-item.off .dot { background:#6f7d97; }
+  .side-item.alert { background:rgba(255,80,80,.16); color:#ffb3b3; }
+  .side-item.alert.active { background:#c0392b; color:#fff; }
+  .side-item.alert .dot { background:#ff6b6b; }
   .editor { flex:1 1 auto; min-width:0; }
   .panel { display:none; }
   .panel.active { display:block; }
@@ -324,7 +327,10 @@ $current_user = rotator_auth_user();
         </div>
         <div class="hint">Give this link to players for this brand. Or point a dedicated entry domain at it using the Entry domains box above-left.</div>
       </div>
-      <div class="status-head">Live status (auto-checked + real visitors)</div>
+      <div class="status-head" style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+        <span>Live status (auto-checked + real visitors)</span>
+        <button type="button" class="ghost f-rotate" style="padding:6px 10px;font-size:.78rem;">&#8635; Force rotate to next</button>
+      </div>
       <div class="status-list"></div>
       <div class="hint">CLEAN = reachable &middot; BLOCKED = blocked in Indonesia &middot; DOWN = dead/error &middot; IN USE = currently serving players. The system checks automatically; click “Run check now” for an instant check.</div>
     </div>
@@ -450,22 +456,20 @@ $current_user = rotator_auth_user();
         var ck = (CHECKS && CHECKS[slug]) || {};
         var targets = (node.querySelector('.f-targets').value || '').split(/\r?\n/).map(norm).filter(Boolean);
         statusBox.innerHTML = '';
-        if (!targets.length){ statusBox.innerHTML = '<div class="hint">No targets yet — add some and Save.</div>'; return; }
-        targets.forEach(function(u){
+        if (!targets.length){ statusBox.innerHTML = '<div class="hint">No targets yet — add some and Save.</div>'; item.classList.remove('alert'); return; }
+        var firstKey = null;
+        targets.forEach(function(u, idx){
           var c = ck[u]; var v = vs[u];
-          var cls='wait', txt='NOT CHECKED', reason='Not checked yet', when='';
-          if (c){
-            when = 'checked ' + timeAgo(c.ts);
-            reason = c.reason || '';
-            if (c.status==='clean'){ cls='act'; txt='CLEAN'; }
-            else if (c.status==='blocked'){ cls='blk'; txt='BLOCKED'; }
-            else { cls='wait'; txt='DOWN'; }
-          } else if (v){
-            when = timeAgo(v.ts);
-            if (v.status==='active'){ cls='act'; txt='CLEAN'; reason='Served to players'; }
-            else if (v.status==='blocked'){ cls='blk'; txt='BLOCKED'; reason='A visitor could not reach it'; }
-          }
+          var key='unknown', cls='wait', txt='NOT CHECKED', reason='Not checked yet', when='';
+          // A real visitor "blocked" is authoritative (ISP blocks aren't always
+          // visible to the server), then checks, then visitor "active".
+          if (v && v.status==='blocked'){ key='blocked'; cls='blk'; txt='BLOCKED'; reason='Reported blocked in Indonesia'; when=timeAgo(v.ts); }
+          else if (c && c.status==='blocked'){ key='blocked'; cls='blk'; txt='BLOCKED'; reason=c.reason||''; when='checked '+timeAgo(c.ts); }
+          else if (c && c.status==='down'){ key='down'; cls='wait'; txt='DOWN'; reason=c.reason||''; when='checked '+timeAgo(c.ts); }
+          else if (v && v.status==='active'){ key='clean'; cls='act'; txt='CLEAN'; reason='Serving players'; when=timeAgo(v.ts); }
+          else if (c && c.status==='clean'){ key='clean'; cls='act'; txt='CLEAN'; reason=c.reason||''; when='checked '+timeAgo(c.ts); }
           var inUse = (v && v.status==='active');
+          if (idx===0) firstKey = key;
           var row=document.createElement('div'); row.className='st-row';
           var badge=document.createElement('span'); badge.className='badge '+cls; badge.textContent=txt;
           var mid=document.createElement('div'); mid.className='st-mid';
@@ -476,6 +480,8 @@ $current_user = rotator_auth_user();
           if (inUse){ var tag=document.createElement('span'); tag.className='badge'; tag.style.background='rgba(91,157,255,.2)'; tag.style.color='#9cc0ff'; tag.textContent='IN USE'; row.appendChild(tag); }
           statusBox.appendChild(row);
         });
+        // Side-panel red alert when the top (primary) domain is blocked or down.
+        item.classList.toggle('alert', firstKey==='blocked' || firstKey==='down');
       }
       renderStatus();
       renderers.push(renderStatus);
@@ -495,6 +501,17 @@ $current_user = rotator_auth_user();
           var first = sideList.querySelector('.side-item');
           if (first) selectPanel(first.dataset.key);
         }
+      });
+
+      node.querySelector('.f-rotate').addEventListener('click', function () {
+        var ta = node.querySelector('.f-targets');
+        var lines = ta.value.split(/\r?\n/).map(function (x) { return x.trim(); }).filter(Boolean);
+        if (lines.length < 2) { alert('Add at least 2 backup domains before rotating.'); return; }
+        if (!confirm('Force rotate "' + (labelInput.value || 'this brand') + '" to the next domain now?')) return;
+        var first = lines.shift(); lines.push(first);
+        ta.value = lines.join('\n');
+        var f = document.getElementById('rulesForm');
+        if (f.requestSubmit) f.requestSubmit(); else f.submit();
       });
 
       if (select) selectPanel(key);
