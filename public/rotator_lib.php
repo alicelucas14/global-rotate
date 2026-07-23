@@ -18,9 +18,13 @@ function rotator_load() {
     $raw = @file_get_contents($path);
     $data = json_decode($raw, true);
     if (!is_array($data) || !isset($data['rules']) || !is_array($data['rules'])) {
-        return ['rules' => []];
+        return ['rules' => [], 'pool' => []];
+    }
+    if (!isset($data['pool']) || !is_array($data['pool'])) {
+        $data['pool'] = [];
     }
     return $data;
+
 }
 
 function rotator_save($data) {
@@ -270,3 +274,31 @@ function rotator_run_checks() {
     rotator_checks_save($checks);
     return $checks;
 }
+
+/* ---- Global domain pool (shared fallback candidates for the gateway) ---- */
+
+/** Return the ordered list of all domains in the global pool. */
+function rotator_pool_load() {
+    $data = rotator_load();
+    return $data['pool'] ?? [];
+}
+
+/**
+ * Persist the global domain pool.
+ * URLs are normalised and deduped; order is preserved (priority order).
+ */
+function rotator_pool_save($urls) {
+    $data = rotator_load();
+    $clean = [];
+    $seen  = [];
+    foreach ($urls as $u) {
+        $n = rotator_norm_url(trim((string)$u));
+        if ($n !== '' && !in_array($n, $seen, true)) {
+            $clean[] = $n;
+            $seen[]  = $n;
+        }
+    }
+    $data['pool'] = $clean;
+    return rotator_save($data);
+}
+
