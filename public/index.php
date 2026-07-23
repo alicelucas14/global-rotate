@@ -30,34 +30,51 @@ $ruleSlug = $rule ? rotator_slug($rule['slug'] ?? $rule['label'] ?? '') : '';
   <meta name="robots" content="noindex,nofollow" />
   <title>Menghubungkan…</title>
   <style>
-    :root { color-scheme: dark; }
+    /* Follows the visitor's OS theme. No toggle: this page is on screen for
+       about a second before the redirect, so there is nothing to toggle. */
+    :root {
+      color-scheme: dark light;
+      --bg-from:#1b2a4a; --bg-to:#0b1020; --text:#e7ecf5; --text-2:#a9b6ce; --muted:#6f7d97;
+      --card-bg:rgba(255,255,255,.04); --card-border:rgba(255,255,255,.08);
+      --track:rgba(255,255,255,.15); --accent:#5b9dff;
+      --link-fg:#dbe6ff; --link-bg:rgba(91,157,255,.14); --link-border:rgba(91,157,255,.35);
+    }
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg-from:#e8eefc; --bg-to:#f4f6fb; --text:#131a2a; --text-2:#4f5b73; --muted:#78849a;
+        --card-bg:rgba(255,255,255,.72); --card-border:rgba(19,26,42,.10);
+        --track:rgba(19,26,42,.12); --accent:#2f6fe4;
+        --link-fg:#1f5fd0; --link-bg:rgba(47,111,228,.10); --link-border:rgba(47,111,228,.32);
+      }
+    }
     * { box-sizing: border-box; }
     body {
       margin: 0; min-height: 100vh; display: grid; place-items: center;
       font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-      background: radial-gradient(1200px 600px at 50% -10%, #1b2a4a, #0b1020);
-      color: #e7ecf5;
+      background: radial-gradient(1200px 600px at 50% -10%, var(--bg-from), var(--bg-to));
+      color: var(--text);
     }
     .card {
       text-align: center; padding: 32px 28px; max-width: 420px; width: 92%;
-      background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08);
+      background: var(--card-bg); border: 1px solid var(--card-border);
       border-radius: 18px; backdrop-filter: blur(6px);
     }
     .spinner {
       width: 46px; height: 46px; margin: 6px auto 18px;
-      border: 4px solid rgba(255,255,255,.15); border-top-color: #5b9dff;
+      border: 4px solid var(--track); border-top-color: var(--accent);
       border-radius: 50%; animation: spin 0.9s linear infinite;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
     h1 { font-size: 1.15rem; margin: 0 0 6px; font-weight: 600; }
-    p  { margin: 4px 0; font-size: .92rem; color: #a9b6ce; }
+    p  { margin: 4px 0; font-size: .92rem; color: var(--text-2); }
     .links { margin-top: 18px; display: none; }
     .links a {
       display: block; margin: 8px 0; padding: 11px 14px; border-radius: 12px;
-      text-decoration: none; color: #dbe6ff; background: rgba(91,157,255,.14);
-      border: 1px solid rgba(91,157,255,.35); font-weight: 600;
+      text-decoration: none; color: var(--link-fg); background: var(--link-bg);
+      border: 1px solid var(--link-border); font-weight: 600;
     }
-    .small { font-size: .78rem; color: #6f7d97; margin-top: 14px; }
+    .small { font-size: .78rem; color: var(--muted); margin-top: 14px; }
+    @media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 3s; } }
   </style>
 </head>
 <body>

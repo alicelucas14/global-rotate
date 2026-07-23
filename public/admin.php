@@ -161,78 +161,142 @@ $current_user = rotator_auth_user();
 <meta name="robots" content="noindex,nofollow" />
 <title>Rotator Admin</title>
 <style>
-  :root { color-scheme: dark; }
+  /* Dark is the default token set; light overrides it via [data-theme="light"].
+     The inline script in <head> stamps data-theme before first paint. */
+  :root {
+    color-scheme: dark;
+    --bg:#0b1020; --text:#e7ecf5;
+    --surface:#111a33; --surface-2:#182444;
+    --border:#1e2b4d; --border-soft:#1c2848;
+    --text-2:#cdd8f0; --text-3:#a9b6ce; --muted:#6f7d97; --muted-2:#8492ad;
+    --accent:#3b7bff; --accent-fg:#fff;
+    --input-bg:#0d1530; --input-border:#2a3a63;
+    --link:#7fa8ff;
+    --ghost-bg:#1e2b4d; --ghost-fg:#cdd8f0;
+    --ok:#7bd88f; --ok-bg:rgba(80,200,120,.2);
+    --ok-msg-bg:rgba(80,200,120,.15); --ok-msg-border:rgba(80,200,120,.4);
+    --err-bg:rgba(255,80,80,.15); --err-border:rgba(255,80,80,.4);
+    --danger-fg:#ffb3b3; --danger-bg:rgba(255,80,80,.16);
+    --danger-btn-bg:rgba(255,80,80,.18); --danger-solid:#c0392b; --danger-dot:#ff6b6b;
+    --badge-blk-bg:rgba(255,80,80,.2); --badge-blk-fg:#ff9b9b;
+    --badge-wait-bg:#1e2b4d; --badge-wait-fg:#9fb0d0;
+    --badge-use-bg:rgba(91,157,255,.2); --badge-use-fg:#9cc0ff;
+    --warn:#f0c674;
+  }
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --bg:#f4f6fb; --text:#131a2a;
+    --surface:#ffffff; --surface-2:#e9eefa;
+    --border:#d7dfee; --border-soft:#e7ecf6;
+    --text-2:#26304a; --text-3:#4f5b73; --muted:#78849a; --muted-2:#626e86;
+    --accent:#2f6fe4; --accent-fg:#fff;
+    --input-bg:#ffffff; --input-border:#c7d2e6;
+    --link:#1f5fd0;
+    --ghost-bg:#e6ecf8; --ghost-fg:#26304a;
+    --ok:#17864a; --ok-bg:rgba(23,134,74,.14);
+    --ok-msg-bg:rgba(23,134,74,.12); --ok-msg-border:rgba(23,134,74,.35);
+    --err-bg:rgba(192,57,43,.10); --err-border:rgba(192,57,43,.32);
+    --danger-fg:#a8231b; --danger-bg:rgba(192,57,43,.12);
+    --danger-btn-bg:rgba(192,57,43,.12); --danger-solid:#c0392b; --danger-dot:#d64533;
+    --badge-blk-bg:rgba(192,57,43,.14); --badge-blk-fg:#a8231b;
+    --badge-wait-bg:#e3e9f5; --badge-wait-fg:#4f5b73;
+    --badge-use-bg:rgba(47,111,228,.14); --badge-use-fg:#1f5fd0;
+    --warn:#b8860b;
+  }
   * { box-sizing: border-box; }
   body { margin:0; font-family: system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
-    background:#0b1020; color:#e7ecf5; }
+    background:var(--bg); color:var(--text); }
   header { display:flex; align-items:center; justify-content:space-between;
-    padding:14px 20px; background:#111a33; border-bottom:1px solid #1e2b4d; }
+    padding:14px 20px; background:var(--surface); border-bottom:1px solid var(--border); }
   header h1 { font-size:1.05rem; margin:0; }
+  .head-actions { display:flex; align-items:center; gap:10px; }
+  .theme-btn { background:var(--ghost-bg); color:var(--ghost-fg); padding:10px 14px;
+    display:inline-flex; align-items:center; gap:7px; line-height:1; }
+  .theme-btn .ico { font-size:1rem; }
+  .login-theme { position:fixed; top:16px; right:16px; }
   main { max-width:1040px; margin:0 auto; padding:22px 16px 60px; }
   .layout { display:flex; gap:18px; align-items:flex-start; }
-  .sidebar { flex:0 0 210px; background:#111a33; border:1px solid #1e2b4d;
+  .sidebar { flex:0 0 210px; background:var(--surface); border:1px solid var(--border);
     border-radius:14px; padding:10px; position:sticky; top:16px; }
   .side-title { font-size:.72rem; text-transform:uppercase; letter-spacing:.06em;
-    color:#6f7d97; padding:6px 8px; }
+    color:var(--muted); padding:6px 8px; }
   .side-item { display:flex; align-items:center; justify-content:space-between;
     gap:8px; padding:10px 12px; border-radius:10px; cursor:pointer; font-weight:600;
-    font-size:.9rem; color:#cdd8f0; margin-bottom:2px; }
-  .side-item:hover { background:#182444; }
-  .side-item.active { background:#3b7bff; color:#fff; }
-  .side-item .dot { width:8px; height:8px; border-radius:50%; background:#7bd88f; flex:0 0 auto; }
-  .side-item.off .dot { background:#6f7d97; }
-  .side-item.alert { background:rgba(255,80,80,.16); color:#ffb3b3; }
-  .side-item.alert.active { background:#c0392b; color:#fff; }
-  .side-item.alert .dot { background:#ff6b6b; }
+    font-size:.9rem; color:var(--text-2); margin-bottom:2px; }
+  .side-item:hover { background:var(--surface-2); }
+  .side-item.active { background:var(--accent); color:var(--accent-fg); }
+  .side-item .dot { width:8px; height:8px; border-radius:50%; background:var(--ok); flex:0 0 auto; }
+  .side-item.off .dot { background:var(--muted); }
+  .side-item.alert { background:var(--danger-bg); color:var(--danger-fg); }
+  .side-item.alert.active { background:var(--danger-solid); color:#fff; }
+  .side-item.alert .dot { background:var(--danger-dot); }
+  .side-item .dot.warn { background:var(--warn); }
   .editor { flex:1 1 auto; min-width:0; }
   .panel { display:none; }
   .panel.active { display:block; }
   .side-add { width:100%; margin-top:8px; }
   @media (max-width:720px){ .layout{ flex-direction:column; } .sidebar{ position:static; width:100%; flex-basis:auto; } }
   .msg { padding:10px 14px; border-radius:10px; margin:0 0 16px; font-size:.9rem; }
-  .err { background:rgba(255,80,80,.15); border:1px solid rgba(255,80,80,.4); }
-  .ok  { background:rgba(80,200,120,.15); border:1px solid rgba(80,200,120,.4); }
-  .login { max-width:340px; margin:12vh auto 0; background:#111a33;
-    border:1px solid #1e2b4d; border-radius:16px; padding:26px; }
-  label { display:block; font-size:.8rem; color:#a9b6ce; margin:12px 0 5px; }
+  .err { background:var(--err-bg); border:1px solid var(--err-border); color:var(--danger-fg); }
+  .ok  { background:var(--ok-msg-bg); border:1px solid var(--ok-msg-border); }
+  .login { max-width:340px; margin:12vh auto 0; background:var(--surface);
+    border:1px solid var(--border); border-radius:16px; padding:26px; }
+  .login .sub { font-size:.82rem; color:var(--text-3); margin:0 0 8px; }
+  label { display:block; font-size:.8rem; color:var(--text-3); margin:12px 0 5px; }
   input[type=text], input[type=password], textarea {
     width:100%; padding:10px 12px; border-radius:10px;
-    border:1px solid #2a3a63; background:#0d1530; color:#e7ecf5; font-size:.9rem; }
+    border:1px solid var(--input-border); background:var(--input-bg); color:var(--text); font-size:.9rem; }
   textarea { resize:vertical; min-height:64px; font-family:ui-monospace,monospace; }
   textarea.f-hosts { min-height:46px; height:46px; }
   textarea.f-targets { min-height:200px; }
   button { cursor:pointer; border:0; border-radius:10px; padding:10px 16px;
     font-weight:600; font-size:.9rem; }
-  .primary { background:#3b7bff; color:#fff; }
-  .ghost { background:#1e2b4d; color:#cdd8f0; }
-  .danger { background:rgba(255,80,80,.18); color:#ffb3b3; }
-  .rule { background:#111a33; border:1px solid #1e2b4d; border-radius:14px;
+  .primary { background:var(--accent); color:var(--accent-fg); }
+  .ghost { background:var(--ghost-bg); color:var(--ghost-fg); }
+  .danger { background:var(--danger-btn-bg); color:var(--danger-fg); }
+  .rule { background:var(--surface); border:1px solid var(--border); border-radius:14px;
     padding:16px; margin:0 0 16px; }
   .rule .row { display:flex; gap:14px; flex-wrap:wrap; }
   .rule .col { flex:1 1 260px; }
   .rule .head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:8px; }
-  .toggle { display:flex; align-items:center; gap:7px; font-size:.82rem; color:#a9b6ce; }
+  .toggle { display:flex; align-items:center; gap:7px; font-size:.82rem; color:var(--text-3); }
   .bar { display:flex; gap:10px; margin-top:18px; }
-  .hint { font-size:.72rem; color:#6f7d97; margin-top:4px; }
-  .status-head { font-size:.82rem; color:#a9b6ce; margin-top:16px; font-weight:600; }
+  .hint { font-size:.72rem; color:var(--muted); margin-top:4px; }
+  .status-head { font-size:.82rem; color:var(--text-3); margin-top:16px; font-weight:600; }
   .status-list { margin-top:6px; }
-  .st-row { display:flex; align-items:flex-start; gap:10px; padding:8px 0; border-top:1px solid #1c2848; font-size:.85rem; }
+  .st-row { display:flex; align-items:flex-start; gap:10px; padding:8px 0; border-top:1px solid var(--border-soft); font-size:.85rem; }
   .st-mid { flex:1 1 auto; min-width:0; }
-  .st-url { color:#cdd8f0; word-break:break-all; }
-  .st-reason { font-size:.72rem; color:#8492ad; margin-top:2px; }
-  .st-when { color:#6f7d97; font-size:.74rem; flex:0 0 auto; }
+  .st-url { color:var(--text-2); word-break:break-all; }
+  .st-reason { font-size:.72rem; color:var(--muted-2); margin-top:2px; }
+  .st-when { color:var(--muted); font-size:.74rem; flex:0 0 auto; }
   .badge { font-size:.66rem; font-weight:700; letter-spacing:.04em; padding:3px 9px; border-radius:20px; flex:0 0 auto; }
-  .badge.act { background:rgba(80,200,120,.2); color:#7bd88f; }
-  .badge.blk { background:rgba(255,80,80,.2); color:#ff9b9b; }
-  .badge.wait { background:#1e2b4d; color:#9fb0d0; }
-  a.link { color:#7fa8ff; }
+  .badge.act { background:var(--ok-bg); color:var(--ok); }
+  .badge.blk { background:var(--badge-blk-bg); color:var(--badge-blk-fg); }
+  .badge.wait { background:var(--badge-wait-bg); color:var(--badge-wait-fg); }
+  .badge.use { background:var(--badge-use-bg); color:var(--badge-use-fg); }
+  a.link { color:var(--link); }
 </style>
+<script>
+  // Apply the saved theme before first paint so the panel never flashes.
+  // No stored choice -> follow the OS. No JS at all -> the dark defaults stand.
+  (function () {
+    var t;
+    try { t = localStorage.getItem('rotator_theme'); } catch (e) {}
+    if (t !== 'light' && t !== 'dark') {
+      t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) ? 'light' : 'dark';
+    }
+    document.documentElement.setAttribute('data-theme', t);
+  })();
+</script>
 </head>
 <body>
 <?php if (!is_logged_in()): ?>
+  <button type="button" class="ghost theme-btn login-theme" data-theme-toggle>
+    <span class="ico"></span><span class="txt"></span>
+  </button>
   <div class="login">
     <h1 style="margin:0 0 4px;">Rotator Admin</h1>
-    <p style="font-size:.82rem;color:#a9b6ce;margin:0 0 8px;">Sign in to manage redirects.</p>
+    <p class="sub">Sign in to manage redirects.</p>
     <?php if ($error): ?><div class="msg err"><?php echo htmlspecialchars($error); ?></div><?php endif; ?>
     <form method="post">
       <input type="hidden" name="action" value="login" />
@@ -246,10 +310,15 @@ $current_user = rotator_auth_user();
 <?php else: ?>
   <header>
     <h1>Rotator Admin</h1>
-    <form method="post" style="margin:0;">
-      <input type="hidden" name="action" value="logout" />
-      <button class="ghost" type="submit">Log out</button>
-    </form>
+    <div class="head-actions">
+      <button type="button" class="ghost theme-btn" data-theme-toggle>
+        <span class="ico"></span><span class="txt"></span>
+      </button>
+      <form method="post" style="margin:0;">
+        <input type="hidden" name="action" value="logout" />
+        <button class="ghost" type="submit">Log out</button>
+      </form>
+    </div>
   </header>
   <main>
     <?php if ($error): ?><div class="msg err"><?php echo htmlspecialchars($error); ?></div><?php endif; ?>
@@ -262,7 +331,7 @@ $current_user = rotator_auth_user();
         <button type="button" class="ghost side-add" id="addRule">+ Add</button>
         <div class="side-title" style="margin-top:14px;">Settings</div>
         <div class="side-item" id="sideAccount">
-          <span style="display:flex;align-items:center;gap:8px;"><span class="dot" style="background:#f0c674;"></span><span>Account</span></span>
+          <span style="display:flex;align-items:center;gap:8px;"><span class="dot warn"></span><span>Account</span></span>
         </div>
       </aside>
 
@@ -478,7 +547,7 @@ $current_user = rotator_auth_user();
           var reasonEl=document.createElement('div'); reasonEl.className='st-reason'; reasonEl.textContent = reason + (when?(' · '+when):'');
           mid.appendChild(urlEl); mid.appendChild(reasonEl);
           row.appendChild(badge); row.appendChild(mid);
-          if (inUse){ var tag=document.createElement('span'); tag.className='badge'; tag.style.background='rgba(91,157,255,.2)'; tag.style.color='#9cc0ff'; tag.textContent='IN USE'; row.appendChild(tag); }
+          if (inUse){ var tag=document.createElement('span'); tag.className='badge use'; tag.textContent='IN USE'; row.appendChild(tag); }
           statusBox.appendChild(row);
         });
         // Side-panel red alert when the top (primary) domain is blocked or down.
@@ -540,5 +609,51 @@ $current_user = rotator_auth_user();
     });
   </script>
 <?php endif; ?>
+
+<script>
+  // Theme toggle — shared by the login screen and the panel header.
+  (function () {
+    var root = document.documentElement;
+    var btns = document.querySelectorAll('[data-theme-toggle]');
+    if (!btns.length) return;
+
+    function paint() {
+      var dark = root.getAttribute('data-theme') !== 'light';
+      // The button offers the theme you'd switch TO.
+      for (var i = 0; i < btns.length; i++) {
+        btns[i].querySelector('.ico').textContent = dark ? '☀' : '☾';
+        btns[i].querySelector('.txt').textContent = dark ? 'Light' : 'Dark';
+        btns[i].setAttribute('title', dark ? 'Switch to light theme' : 'Switch to dark theme');
+        btns[i].setAttribute('aria-label', dark ? 'Switch to light theme' : 'Switch to dark theme');
+      }
+    }
+
+    function set(theme, remember) {
+      root.setAttribute('data-theme', theme);
+      if (remember) { try { localStorage.setItem('rotator_theme', theme); } catch (e) {} }
+      paint();
+    }
+
+    for (var i = 0; i < btns.length; i++) {
+      btns[i].addEventListener('click', function () {
+        set(root.getAttribute('data-theme') === 'light' ? 'dark' : 'light', true);
+      });
+    }
+
+    // Until a choice is made, keep following the OS if it changes mid-session.
+    if (window.matchMedia) {
+      var mq = window.matchMedia('(prefers-color-scheme: light)');
+      var onChange = function (e) {
+        var stored;
+        try { stored = localStorage.getItem('rotator_theme'); } catch (err) {}
+        if (stored !== 'light' && stored !== 'dark') set(e.matches ? 'light' : 'dark', false);
+      };
+      if (mq.addEventListener) mq.addEventListener('change', onChange);
+      else if (mq.addListener) mq.addListener(onChange);
+    }
+
+    paint();
+  })();
+</script>
 </body>
 </html>
