@@ -590,6 +590,26 @@ $current_user = rotator_auth_user();
     padding:2px 7px; border-radius:20px; min-width:22px; text-align:center;
   }
   .side-item.active .side-count { background:rgba(255,255,255,.15); color:#fff; border-color:rgba(255,255,255,.2); }
+
+  /* ── per-brand target list ── */
+  .tgt-list    { display:flex; flex-direction:column; gap:6px; margin-bottom:8px; min-height:32px; }
+  .tgt-row     {
+    display:flex; align-items:center; gap:6px;
+    padding:5px 7px; border-radius:8px; background:var(--surface-2);
+    border:1px solid var(--border-soft); transition:border-color .15s;
+  }
+  .tgt-row.drag-over { border-color:var(--accent); background:var(--ghost-bg); }
+  .tgt-drag    { cursor:grab; color:var(--muted); font-size:.9rem; padding:3px 2px; user-select:none; flex-shrink:0; }
+  .tgt-drag:active { cursor:grabbing; }
+  .tgt-num     { font-size:.64rem; font-weight:700; color:var(--muted); width:18px; text-align:right; flex-shrink:0; font-family:'SF Mono',ui-monospace,monospace; }
+  .tgt-input   { flex:1; border-radius:7px!important; padding:5px 9px!important; font-size:.8rem!important; font-family:'SF Mono',ui-monospace,monospace!important; }
+  .tgt-remove  { flex-shrink:0; }
+  .tgt-empty   { font-size:.78rem; color:var(--muted); padding:8px 0; }
+  .tgt-add-btn {
+    width:100%; background:transparent; color:var(--muted-2); border:1px dashed var(--border);
+    font-size:.78rem; padding:7px; border-radius:8px; justify-content:center; margin-top:4px;
+  }
+  .tgt-add-btn:hover { background:var(--surface-2); color:var(--text-2); border-style:solid; }
 </style>
 <script>
   // Apply the saved theme before first paint so the panel never flashes.
@@ -778,8 +798,11 @@ $current_user = rotator_auth_user();
         </div>
         <div>
           <span class="col-label">Backup game domains &mdash; priority order</span>
-          <textarea class="f-targets" placeholder="site1.com&#10;site2.com&#10;site3.com"></textarea>
-          <div class="hint">Players are sent to the first working domain. Blocked ones are skipped automatically.</div>
+          <!-- hidden textarea keeps the data; the list UI below is the editor -->
+          <textarea class="f-targets" style="display:none"></textarea>
+          <div class="tgt-list f-tgt-list"></div>
+          <button type="button" class="btn-ghost tgt-add-btn f-add-target">+ Add domain</button>
+          <div class="hint" style="margin-top:6px;">Players are sent to the first working domain. Blocked ones are skipped automatically. Drag &#8801; to reorder.</div>
         </div>
       </div>
       <div class="link-row">
@@ -901,10 +924,86 @@ $current_user = rotator_auth_user();
       var labelInput   = node.querySelector('.f-label');
       var enabledInput = node.querySelector('.f-enabled');
       labelInput.value = r.label || '';
-      node.querySelector('.f-hosts').value   = r.hosts   || '';
-      node.querySelector('.f-targets').value = r.targets || '';
+      node.querySelector('.f-hosts').value = r.hosts || '';
       enabledInput.checked = !!r.enabled;
       panels.appendChild(node);
+
+      // ── per-brand target list editor ──────────────────────────────────
+      var tgtHidden  = node.querySelector('.f-targets');   // hidden textarea
+      var tgtListEl  = node.querySelector('.f-tgt-list');  // visible list
+      var tgtAddBtn  = node.querySelector('.f-add-target');
+      var tgtDragSrc = null;
+
+      function tgtSerialize() {
+        var urls = [];
+        tgtListEl.querySelectorAll('.tgt-row input').forEach(function (inp) {
+          var v = inp.value.trim(); if (v) urls.push(v);
+        });
+        tgtHidden.value = urls.join('\n');
+        return urls;
+      }
+
+      function tgtRenumber() {
+        tgtListEl.querySelectorAll('.tgt-row').forEach(function (r, i) {
+          var n = r.querySelector('.tgt-num'); if (n) n.textContent = (i+1)+'.';
+        });
+      }
+
+      function makeTgtRow(url) {
+        var row  = document.createElement('div'); row.className = 'tgt-row'; row.draggable = true;
+        var drag = document.createElement('span'); drag.className = 'tgt-drag'; drag.textContent = '\u2261'; drag.title = 'Drag to reorder';
+        var num  = document.createElement('span'); num.className = 'tgt-num'; num.textContent = '1.';
+        var inp  = document.createElement('input'); inp.type = 'text'; inp.className = 'tgt-input';
+        inp.placeholder = 'https://yourdomain.com'; inp.value = url || '';
+        var rem  = document.createElement('button'); rem.type = 'button'; rem.className = 'btn-danger btn-sm tgt-remove'; rem.textContent = '\u2715';
+        rem.addEventListener('click', function () { row.remove(); tgtRenumber(); tgtSerialize(); renderStatus(); });
+        inp.addEventListener('input', function () { tgtSerialize(); renderStatus(); });
+        // drag events
+        row.addEventListener('dragstart', function (e) {
+          tgtDragSrc = row; e.dataTransfer.effectAllowed = 'move';
+          setTimeout(function () { row.style.opacity = '.4'; }, 0);
+        });
+        row.addEventListener('dragend', function () {
+          row.style.opacity = '';
+          tgtListEl.querySelectorAll('.tgt-row').forEach(function (r) { r.classList.remove('drag-over'); });
+          tgtRenumber(); tgtSerialize(); renderStatus();
+        });
+        row.addEventListener('dragover', function (e) {
+          e.preventDefault(); e.dataTransfer.dropEffect = 'move';
+          if (tgtDragSrc && tgtDragSrc !== row) row.classList.add('drag-over');
+        });
+        row.addEventListener('dragleave', function () { row.classList.remove('drag-over'); });
+        row.addEventListener('drop', function (e) {
+          e.preventDefault(); row.classList.remove('drag-over');
+          if (!tgtDragSrc || tgtDragSrc === row) return;
+          var rows = Array.from(tgtListEl.querySelectorAll('.tgt-row'));
+          if (rows.indexOf(tgtDragSrc) < rows.indexOf(row)) tgtListEl.insertBefore(tgtDragSrc, row.nextSibling);
+          else tgtListEl.insertBefore(tgtDragSrc, row);
+          tgtRenumber(); tgtSerialize();
+        });
+        row.appendChild(drag); row.appendChild(num); row.appendChild(inp); row.appendChild(rem);
+        return row;
+      }
+
+      function renderTgtList(urlsStr) {
+        tgtListEl.innerHTML = '';
+        var urls = (urlsStr || '').split(/\r?\n/).map(function(u){ return u.trim(); }).filter(Boolean);
+        if (!urls.length) {
+          tgtListEl.innerHTML = '<div class="tgt-empty">No domains yet — click &ldquo;+ Add domain&rdquo;.</div>';
+          return;
+        }
+        urls.forEach(function (u) { tgtListEl.appendChild(makeTgtRow(u)); });
+        tgtRenumber();
+      }
+
+      tgtAddBtn.addEventListener('click', function () {
+        var empty = tgtListEl.querySelector('.tgt-empty'); if (empty) empty.remove();
+        var row = makeTgtRow(''); tgtListEl.appendChild(row);
+        row.querySelector('input').focus(); tgtRenumber();
+      });
+
+      renderTgtList(r.targets || '');
+      // ── end target list editor ────────────────────────────────────────
 
       // sidebar item
       var item = document.createElement('div');
@@ -999,12 +1098,15 @@ $current_user = rotator_auth_user();
         }
       });
       node.querySelector('.f-rotate').addEventListener('click', function () {
-        var ta    = node.querySelector('.f-targets');
-        var lines = ta.value.split(/\r?\n/).map(function(x){ return x.trim(); }).filter(Boolean);
+        // read from the live list, not the textarea directly
+        var rows = tgtListEl.querySelectorAll('.tgt-row input');
+        var lines = Array.from(rows).map(function(i){ return i.value.trim(); }).filter(Boolean);
         if (lines.length < 2) { alert('Add at least 2 backup domains before rotating.'); return; }
         if (!confirm('Force rotate "' + (labelInput.value || 'this brand') + '" to the next domain now?')) return;
-        var first = lines.shift(); lines.push(first);
-        ta.value = lines.join('\n');
+        // move first to last in the UI
+        var firstRow = tgtListEl.querySelector('.tgt-row');
+        if (firstRow) tgtListEl.appendChild(firstRow);
+        tgtRenumber(); tgtSerialize();
         var f = document.getElementById('rulesForm');
         if (f.requestSubmit) f.requestSubmit(); else f.submit();
       });
