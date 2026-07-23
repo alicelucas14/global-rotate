@@ -1003,6 +1003,7 @@ $current_user = rotator_auth_user();
       });
 
       renderTgtList(r.targets || '');
+      tgtSerialize(); // populate the hidden textarea on initial load so renderStatus works
       // ── end target list editor ────────────────────────────────────────
 
       // sidebar item
