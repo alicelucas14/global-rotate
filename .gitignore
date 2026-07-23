@@ -9,6 +9,9 @@ node_modules/
 *.zip
 _upload/
 
+# Per-server credentials. Copy admin_config.example.php on each deploy target.
+public/admin_config.php
+
 # Runtime data written by the admin panel (don't overwrite live rules on deploy)
 rotator-data.json
 rotator-stats.json
