@@ -302,3 +302,73 @@ function rotator_pool_save($urls) {
     return rotator_save($data);
 }
 
+/* ---- Telegram-driven instant block marking ---- */
+
+/**
+ * Mark every occurrence of $domain as 'blocked' across all brand checks.
+ *
+ * Called by tg-webhook.php the moment a Komdigi/ISP block alert arrives.
+ * The domain is matched against the host part of every target URL in every
+ * enabled rule; matching entries are written to rotator-checks.json so that
+ * the gateway's PHP candidate filter (index.php) skips them immediately.
+ *
+ * Returns the number of URL entries that were updated.
+ */
+function rotator_mark_blocked($domain) {
+    $domain = strtolower(trim((string)$domain));
+    $domain = preg_replace('/^www\./', '', $domain); // strip leading www
+    if ($domain === '') return 0;
+
+    $data   = rotator_load();
+    $checks = rotator_checks_load();
+    $now    = gmdate('c');
+    $count  = 0;
+
+    foreach ($data['rules'] as $rule) {
+        if (empty($rule['enabled'])) continue;
+        $slug = rotator_slug($rule['slug'] ?? $rule['label'] ?? '');
+        if ($slug === '') continue;
+
+        foreach (($rule['targets'] ?? []) as $t) {
+            $u = rotator_norm_url($t);
+            if ($u === '') continue;
+
+            $urlHost = strtolower((string)parse_url($u, PHP_URL_HOST));
+            $urlHost = preg_replace('/^www\./', '', $urlHost);
+
+            if ($urlHost === $domain) {
+                if (!isset($checks[$slug])) $checks[$slug] = [];
+                $checks[$slug][$u] = [
+                    'status' => 'blocked',
+                    'reason' => 'Komdigi/ISP block alert via Telegram',
+                    'http'   => 0,
+                    'ts'     => $now,
+                ];
+                $count++;
+            }
+        }
+    }
+
+    if ($count > 0) rotator_checks_save($checks);
+    return $count;
+}
+
+/**
+ * Return a flat set (array) of all URLs currently flagged as 'blocked'
+ * in rotator-checks.json.  Used by index.php to filter $candidates before
+ * injecting them into the page's JavaScript.
+ */
+function rotator_blocked_urls() {
+    $checks  = rotator_checks_load();
+    $blocked = [];
+    foreach ($checks as $brandChecks) {
+        if (!is_array($brandChecks)) continue;
+        foreach ($brandChecks as $url => $entry) {
+            if (isset($entry['status']) && $entry['status'] === 'blocked') {
+                $blocked[] = $url;
+            }
+        }
+    }
+    return array_unique($blocked);
+}
+
