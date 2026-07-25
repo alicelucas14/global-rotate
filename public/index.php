@@ -37,7 +37,25 @@ if (empty($candidates)) {
     }
 }
 $ruleSlug = $rule ? rotator_slug($rule['slug'] ?? $rule['label'] ?? '') : '';
-?><!doctype html>
+
+// Option B: strip known-blocked URLs (Telegram alerts + cron checks) from
+// the candidate list before injecting into JS.  Blocked domains go to the
+// very end as a last-resort fallback so visitors are never left with zero
+// options if every URL happens to be blocked simultaneously.
+$blockedUrls  = rotator_blocked_urls();
+$cleanCands   = [];
+$blockedCands = [];
+foreach ($candidates as $cu) {
+    if (in_array($cu, $blockedUrls, true)) {
+        $blockedCands[] = $cu;
+    } else {
+        $cleanCands[] = $cu;
+    }
+}
+// Keep blocked at the tail so the JS fallback manual-link list still shows them.
+$candidates = array_merge($cleanCands, $blockedCands);
+?>
+<!doctype html>
 <html lang="id">
 <head>
   <meta charset="utf-8" />
@@ -244,7 +262,32 @@ $ruleSlug = $rule ? rotator_slug($rule['slug'] ?? $rule['label'] ?? '') : '';
     // probe -> 'ok'      : reachable
     //          'reject'  : DNS/connection failure (real block or dead domain)
     //          'timeout' : no answer in time (ambiguous: slow site / Cloudflare)
+    //
+    // Strategy: call our own /probe.php (same-origin) so the check runs from
+    // the server, bypassing Cloudflare Bot Fight Mode / WAF on target domains
+    // that block cross-origin fetch() requests from browsers.
+    // Falls back to a direct browser probe if /probe.php is unavailable.
     function probe(url) {
+      var srvUrl = '/probe.php?url=' + encodeURIComponent(norm(url));
+      if (typeof fetch === 'function') {
+        var ctrl   = typeof AbortController === 'function' ? new AbortController() : null;
+        var signal = ctrl ? ctrl.signal : undefined;
+        var timer  = ctrl ? setTimeout(function () { ctrl.abort(); }, TIMEOUT_MS) : null;
+        return fetch(srvUrl, { cache: 'no-store', signal: signal })
+          .then(function (r) { if (timer) clearTimeout(timer); return r.ok ? r.json() : null; })
+          .then(function (d) {
+            if (!d) return probeDirect(url); // server error → fall back
+            if (d.ok)                        return 'ok';
+            if (d.status === 'blocked' || d.status === 'down') return 'reject';
+            return probeDirect(url);          // unknown status → fall back
+          })
+          .catch(function () { if (timer) clearTimeout(timer); return probeDirect(url); });
+      }
+      return probeDirect(url);
+    }
+
+    // Direct browser probe — used as fallback when /probe.php is unreachable.
+    function probeDirect(url) {
       var target = norm(url) + '/favicon.ico?_r=' + Date.now();
       if (typeof fetch === 'function' && typeof AbortController === 'function') {
         var ctrl = new AbortController();
