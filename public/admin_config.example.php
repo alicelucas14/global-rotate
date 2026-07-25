@@ -26,3 +26,30 @@ define('ADMIN_PASS', 'change-this-password');
 //
 // Generate something unguessable, e.g.  openssl rand -hex 24
 define('CHECK_KEY', 'change-this-cron-key');
+
+// ---- Telegram bot — real-time Komdigi/ISP block alerts ---------------
+//
+// When a block alert arrives in your Telegram group, tg-webhook.php
+// instantly marks the affected domain as 'blocked' in rotator-checks.json
+// so the gateway stops routing visitors there on the very next page load.
+//
+// Step 1 — Create a bot:
+//   Open Telegram → search @BotFather → send /newbot → follow the prompts.
+//   Copy the "HTTP API token" it gives you (looks like 7123456789:AABBcc...).
+//
+// Step 2 — Add the bot to your alert group:
+//   Invite the bot as a member (regular member, not admin).
+//   Send any message in the group, then open in your browser:
+//   https://api.telegram.org/bot<TOKEN>/getUpdates
+//   Find "chat":{"id":...} — that negative number is your Chat ID.
+//
+// Step 3 — Set the three constants below (on the server only).
+//
+// Step 4 — Register the webhook (one-time, run in browser):
+//   https://your-domain.com/tg-webhook.php?setup=1&key=<CHECK_KEY>
+//   You should see {"ok":true,...} in response.
+//
+define('TG_BOT_TOKEN', '');           // e.g. '7123456789:AABBcc...'
+define('TG_CHAT_ID',   '');           // e.g. '-1001234567890'  (negative = group)
+define('TG_SECRET',    'change-this-webhook-secret'); // any random string you invent
+

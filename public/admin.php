@@ -2,6 +2,20 @@
 require __DIR__ . '/admin_config.php';
 require __DIR__ . '/rotator_lib.php';
 
+/* ---- Telegram config helpers ---- */
+function tg_config_path() {
+    return __DIR__ . '/../rotator-tg.json';
+}
+function tg_config_load() {
+    $p = tg_config_path();
+    if (!file_exists($p)) return ['token' => '', 'chat_id' => '', 'secret' => ''];
+    $d = json_decode(@file_get_contents($p), true);
+    return is_array($d) ? array_merge(['token' => '', 'chat_id' => '', 'secret' => ''], $d) : ['token' => '', 'chat_id' => '', 'secret' => ''];
+}
+function tg_config_save($d) {
+    return @file_put_contents(tg_config_path(), json_encode($d, JSON_PRETTY_PRINT), LOCK_EX) !== false;
+}
+
 session_start();
 
 function rotator_auth_path() {
@@ -153,8 +167,27 @@ if ($action === 'pool_save' && is_logged_in()) {
     }
 }
 
-$data  = rotator_load();
-$rules = $data['rules'];
+// ---- Save Telegram config ----
+if ($action === 'tg_save' && is_logged_in()) {
+    if (!check_csrf()) {
+        $error = 'Session expired, please try again.';
+    } else {
+        $tgData = [
+            'token'   => trim($_POST['tg_token']   ?? ''),
+            'chat_id' => trim($_POST['tg_chat_id'] ?? ''),
+            'secret'  => trim($_POST['tg_secret']  ?? ''),
+        ];
+        if (tg_config_save($tgData)) {
+            $notice = 'Telegram settings saved.';
+        } else {
+            $error = 'Could not save Telegram config (check folder permissions).';
+        }
+    }
+}
+
+$data    = rotator_load();
+$rules   = $data['rules'];
+$tgCfg   = tg_config_load();
 
 // Seed the three brands the first time (when there is no data yet).
 if (empty($rules)) {
@@ -694,6 +727,12 @@ $current_user = rotator_auth_user();
           </span>
           <span class="side-count" id="poolCount"><?php echo count($pool); ?></span>
         </div>
+        <div class="side-item" id="sideTelegram">
+          <span class="side-left">
+            <span style="font-size:.95rem;">✈️</span>
+            <span>Telegram</span>
+          </span>
+        </div>
         <div class="side-item" id="sideAccount">
           <span class="side-left">
             <span style="font-size:.85rem;opacity:.7;">&#9881;</span>
@@ -747,6 +786,63 @@ $current_user = rotator_auth_user();
             </div>
             <div class="action-bar">
               <button type="submit" class="btn-primary">Update account</button>
+            </div>
+          </div>
+        </form>
+
+        <form method="post" id="tgForm" class="panel" data-key="telegram">
+          <input type="hidden" name="action" value="tg_save" />
+          <input type="hidden" name="csrf" value="<?php echo htmlspecialchars($token); ?>" />
+          <div class="account-card" style="position:relative;overflow:hidden;">
+            <div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,#229ED9,#54A8D0,#229ED9);border-radius:18px 18px 0 0;"></div>
+            <h2 class="account-title">✈️ Telegram Block Alerts</h2>
+            <p class="account-sub">When a domain block alert arrives in your Telegram group, the rotator instantly skips that domain for all visitors.</p>
+
+            <div class="field">
+              <label class="field-label" for="tg_token">Bot Token</label>
+              <input type="text" id="tg_token" name="tg_token"
+                value="<?php echo htmlspecialchars($tgCfg['token']); ?>"
+                placeholder="7123456789:AABBcc..."
+                style="max-width:460px;font-family:'SF Mono',ui-monospace,monospace;font-size:.83rem;" />
+              <div class="hint">Get this from @BotFather → /newbot. Looks like <code>1234567890:AABBcc...</code></div>
+            </div>
+
+            <div class="field">
+              <label class="field-label" for="tg_chat_id">Group Chat ID</label>
+              <input type="text" id="tg_chat_id" name="tg_chat_id"
+                value="<?php echo htmlspecialchars($tgCfg['chat_id']); ?>"
+                placeholder="-1001234567890"
+                style="max-width:240px;font-family:'SF Mono',ui-monospace,monospace;font-size:.83rem;" />
+              <div class="hint">Negative number for groups/channels (e.g. <code>-1001234567890</code>). Leave blank to accept any group — the Chat ID will appear in your log after the first message.</div>
+            </div>
+
+            <div class="field">
+              <label class="field-label" for="tg_secret">Webhook Secret</label>
+              <input type="text" id="tg_secret" name="tg_secret"
+                value="<?php echo htmlspecialchars($tgCfg['secret']); ?>"
+                placeholder="any-random-string-you-invent"
+                style="max-width:340px;font-family:'SF Mono',ui-monospace,monospace;font-size:.83rem;" />
+              <div class="hint">Any random string. Keeps strangers from calling your webhook. You invent it — just keep it consistent.</div>
+            </div>
+
+            <div class="action-bar" style="flex-wrap:wrap;gap:10px;">
+              <button type="submit" class="btn-primary" id="saveTgBtn">
+                <span class="btn-spinner"></span>
+                <span class="btn-label">&#128190; Save settings</span>
+              </button>
+              <button type="button" class="btn-ghost" id="registerWebhookBtn">
+                <span class="btn-spinner"></span>
+                <span class="btn-label">&#128279; Register webhook with Telegram</span>
+              </button>
+            </div>
+
+            <div id="webhookResult" style="margin-top:14px;display:none;"></div>
+
+            <div class="hint" style="margin-top:20px;border-top:1px solid var(--border-soft);padding-top:14px;">
+              <strong>How it works:</strong><br>
+              1. Fill in the fields above and click <em>Save settings</em>.<br>
+              2. Click <em>Register webhook with Telegram</em> once — this tells Telegram to POST to your server whenever a message arrives in the group.<br>
+              3. Done! The next time someone posts a blocked domain alert, the rotator will skip it automatically.
             </div>
           </div>
         </form>
@@ -857,23 +953,61 @@ $current_user = rotator_auth_user();
     var tpl         = document.getElementById('ruleTpl');
     var rulesForm   = document.getElementById('rulesForm');
     var accountForm = document.getElementById('accountForm');
+    var tgForm      = document.getElementById('tgForm');
     var sideAccount = document.getElementById('sideAccount');
+    var sideTelegram= document.getElementById('sideTelegram');
     var seq = 0;
 
     function selectPanel(key) {
-      var isAccount = (key === 'account');
-      rulesForm.style.display = isAccount ? 'none' : 'block';
+      var isAccount  = (key === 'account');
+      var isTelegram = (key === 'telegram');
+      var isSpecial  = isAccount || isTelegram;
+      rulesForm.style.display = isSpecial ? 'none' : 'block';
       panels.querySelectorAll('.panel').forEach(function (p) {
-        p.classList.toggle('active', !isAccount && p.dataset.key === key);
+        p.classList.toggle('active', !isSpecial && p.dataset.key === key);
       });
       accountForm.classList.toggle('active', isAccount);
+      if (tgForm) tgForm.classList.toggle('active', isTelegram);
       sideList.querySelectorAll('.side-item').forEach(function (s) {
         s.classList.toggle('active', s.dataset.key === key);
       });
       sideAccount.classList.toggle('active', isAccount);
+      if (sideTelegram) sideTelegram.classList.toggle('active', isTelegram);
     }
 
     sideAccount.addEventListener('click', function () { selectPanel('account'); });
+    if (sideTelegram) sideTelegram.addEventListener('click', function () { selectPanel('telegram'); });
+
+    // ── Register Webhook button ──────────────────────────────────────────
+    var regBtn = document.getElementById('registerWebhookBtn');
+    if (regBtn) {
+      regBtn.addEventListener('click', function () {
+        var token  = document.getElementById('tg_token').value.trim();
+        var secret = document.getElementById('tg_secret').value.trim();
+        var result = document.getElementById('webhookResult');
+        if (!token) { alert('Please enter and save your Bot Token first.'); return; }
+        regBtn.classList.add('loading');
+        regBtn.querySelector('.btn-label').textContent = 'Registering\u2026';
+        result.style.display = 'none';
+        fetch('tg-webhook.php?setup=1&key=<?php echo urlencode(CHECK_KEY); ?>', { cache: 'no-store' })
+          .then(function (r) { return r.text(); })
+          .then(function (txt) {
+            var ok = txt.indexOf('"ok":true') !== -1;
+            result.style.display = 'block';
+            result.innerHTML = ok
+              ? '<div class="msg msg-ok" style="margin:0;">&#10003;&nbsp; Webhook registered! Telegram will now POST to your server on every group message.</div>'
+              : '<div class="msg msg-err" style="margin:0;">&#9888;&nbsp; Unexpected response: <code style="font-size:.78rem;">' + txt.replace(/</g,'&lt;') + '</code></div>';
+          })
+          .catch(function (e) {
+            result.style.display = 'block';
+            result.innerHTML = '<div class="msg msg-err" style="margin:0;">&#9888;&nbsp; Request failed: ' + e + '</div>';
+          })
+          .then(function () {
+            regBtn.classList.remove('loading');
+            regBtn.querySelector('.btn-label').innerHTML = '&#128279; Register webhook with Telegram';
+          });
+      });
+    }
 
     var refreshBtn = document.getElementById('refreshBtn');
     if (refreshBtn) refreshBtn.addEventListener('click', function(){
@@ -1244,24 +1378,24 @@ $current_user = rotator_auth_user();
       poolUrls.value = urls.join('\n');
     });
 
-    // Patch selectPanel to also handle the pool panel.
+    // Patch selectPanel to also handle pool + telegram panels.
     var _origSelect = selectPanel;
     selectPanel = function (key) {
       var isPool = (key === 'pool');
       poolForm.classList.toggle('active', isPool);
       if (sideDomainPool) sideDomainPool.classList.toggle('active', isPool);
-      // Delegate everything else to the original function (which manages rules + account).
-      // But suppress it for the pool key so it doesn't reset the form display.
       if (!isPool) _origSelect(key);
       else {
-        // hide rules form + account form
         var rf = document.getElementById('rulesForm');
         var af = document.getElementById('accountForm');
+        var tf = document.getElementById('tgForm');
         if (rf) rf.style.display = 'none';
         if (af) af.classList.remove('active');
+        if (tf) tf.classList.remove('active');
         document.getElementById('panels') && document.getElementById('panels').querySelectorAll('.panel').forEach(function (p) { p.classList.remove('active'); });
         document.getElementById('sideList') && document.getElementById('sideList').querySelectorAll('.side-item').forEach(function (s) { s.classList.remove('active'); });
         document.getElementById('sideAccount') && document.getElementById('sideAccount').classList.remove('active');
+        document.getElementById('sideTelegram') && document.getElementById('sideTelegram').classList.remove('active');
       }
     };
 
