@@ -185,6 +185,29 @@ if ($action === 'tg_save' && is_logged_in()) {
     }
 }
 
+// ---- Read Telegram webhook log (AJAX) ----
+if ($action === 'tg_log' && is_logged_in()) {
+    header('Content-Type: application/json');
+    $logPath = __DIR__ . '/../tg-webhook.log';
+    if (!file_exists($logPath)) { echo json_encode(['lines' => [], 'exists' => false]); exit; }
+    $lines = @file($logPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    if (!$lines) { echo json_encode(['lines' => [], 'exists' => true]); exit; }
+    $lines   = array_reverse(array_slice($lines, -100));
+    $parsed  = [];
+    foreach ($lines as $line) {
+        $parts    = explode("\t", $line, 5);
+        $parsed[] = [
+            'time'   => $parts[0] ?? '',
+            'chatId' => str_replace('chat_id=', '', $parts[1] ?? ''),
+            'domain' => $parts[2] ?? '',
+            'count'  => $parts[3] ?? '',
+            'text'   => isset($parts[4]) ? mb_substr($parts[4], 0, 140) : '',
+        ];
+    }
+    echo json_encode(['lines' => $parsed, 'exists' => true]);
+    exit;
+}
+
 $data    = rotator_load();
 $rules   = $data['rules'];
 $tgCfg   = tg_config_load();
@@ -643,6 +666,37 @@ $current_user = rotator_auth_user();
     font-size:.78rem; padding:7px; border-radius:8px; justify-content:center; margin-top:4px;
   }
   .tgt-add-btn:hover { background:var(--surface-2); color:var(--text-2); border-style:solid; }
+
+  /* ── Telegram event log ── */
+  .tg-log-wrap { margin-top:20px; border-top:1px solid var(--border-soft); padding-top:16px; }
+  .tg-log-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+  .tg-log-title {
+    font-size:.7rem; font-weight:700; text-transform:uppercase; letter-spacing:.07em;
+    color:var(--muted-2); display:flex; align-items:center; gap:7px;
+  }
+  .tg-log-table-wrap {
+    border-radius:10px; overflow:hidden;
+    border:1px solid var(--border-soft); background:var(--surface-2);
+  }
+  .tg-log-table { width:100%; border-collapse:collapse; font-size:.76rem; }
+  .tg-log-table th {
+    padding:8px 12px; text-align:left; font-size:.65rem; font-weight:700;
+    text-transform:uppercase; letter-spacing:.06em; color:var(--muted);
+    border-bottom:1px solid var(--border-soft); background:rgba(0,0,0,.08);
+  }
+  .tg-log-table td {
+    padding:9px 12px; border-bottom:1px solid var(--border-soft);
+    color:var(--text-2); vertical-align:middle;
+  }
+  .tg-log-table tr:last-child td { border-bottom:none; }
+  .tg-log-table tr:hover td { background:rgba(79,140,255,.04); }
+  .tg-log-domain { font-weight:600; color:var(--accent-2); font-family:'SF Mono',ui-monospace,monospace; }
+  .tg-log-nodomain { color:var(--muted); font-style:italic; }
+  .tg-log-count { font-weight:700; color:var(--ok); white-space:nowrap; }
+  .tg-log-count.zero { color:var(--muted); }
+  .tg-log-time { color:var(--muted); font-family:'SF Mono',ui-monospace,monospace; font-size:.68rem; white-space:nowrap; }
+  .tg-log-empty { text-align:center; padding:28px 0; color:var(--muted); font-size:.83rem; }
+  .tg-log-loading { text-align:center; padding:20px 0; color:var(--muted); font-size:.8rem; }
 </style>
 <script>
   // Apply the saved theme before first paint so the panel never flashes.
@@ -843,6 +897,23 @@ $current_user = rotator_auth_user();
               1. Fill in the fields above and click <em>Save settings</em>.<br>
               2. Click <em>Register webhook with Telegram</em> once — this tells Telegram to POST to your server whenever a message arrives in the group.<br>
               3. Done! The next time someone posts a blocked domain alert, the rotator will skip it automatically.
+            </div>
+
+            <!-- Telegram Event Log -->
+            <div class="tg-log-wrap">
+              <div class="tg-log-header">
+                <span class="tg-log-title">
+                  <span class="live-blink"></span>
+                  Telegram Event Log
+                </span>
+                <button type="button" class="btn-ghost btn-sm" id="refreshTgLogBtn">
+                  <span class="btn-spinner"></span>
+                  <span class="btn-label">&#8635; Refresh</span>
+                </button>
+              </div>
+              <div class="tg-log-table-wrap">
+                <div id="tgLogBody" class="tg-log-loading">Loading…</div>
+              </div>
             </div>
           </div>
         </form>
@@ -1269,6 +1340,86 @@ $current_user = rotator_auth_user();
       });
       document.getElementById('payload').value = JSON.stringify(out);
     });
+  </script>
+
+  <script>
+  // ── Telegram Event Log viewer ──────────────────────────────────────────────
+  (function () {
+    var logBody      = document.getElementById('tgLogBody');
+    var refreshBtn   = document.getElementById('refreshTgLogBtn');
+    var tgSideItem   = document.getElementById('sideTelegram');
+    var loaded       = false;
+
+    function timeAgoShort(iso) {
+      if (!iso) return '';
+      var t = Date.parse(iso); if (isNaN(t)) return iso;
+      var s = Math.floor((Date.now() - t) / 1000);
+      if (s < 60)    return s + 's ago';
+      if (s < 3600)  return Math.floor(s / 60) + 'm ago';
+      if (s < 86400) return Math.floor(s / 3600) + 'h ago';
+      return Math.floor(s / 86400) + 'd ago';
+    }
+
+    function renderLog(data) {
+      if (!data || !data.lines || !data.lines.length) {
+        logBody.innerHTML = '<div class="tg-log-empty">' +
+          (!data || !data.exists ? '📄 No log file yet — it will appear after the first Telegram alert arrives.' :
+          '📭 Log is empty.') + '</div>';
+        return;
+      }
+      var html = '<table class="tg-log-table"><thead><tr>' +
+        '<th>Time</th><th>Chat ID</th><th>Domain</th><th>URLs Marked</th></tr></thead><tbody>';
+      data.lines.forEach(function (row) {
+        var domainCell = row.domain && row.domain !== '[no domain]'
+          ? '<span class="tg-log-domain">' + escHtml(row.domain) + '</span>'
+          : '<span class="tg-log-nodomain">[no domain]</span>';
+        var countNum   = parseInt(row.count) || 0;
+        var countCell  = '<span class="tg-log-count' + (countNum === 0 ? ' zero' : '') + '">' +
+          escHtml(row.count) + '</span>';
+        html += '<tr>' +
+          '<td class="tg-log-time" title="' + escHtml(row.time) + '">' + timeAgoShort(row.time) + '</td>' +
+          '<td style="font-family:monospace;font-size:.72rem;color:var(--muted)">' + escHtml(row.chatId) + '</td>' +
+          '<td>' + domainCell + '</td>' +
+          '<td>' + countCell + '</td>' +
+          '</tr>';
+      });
+      html += '</tbody></table>';
+      logBody.innerHTML = html;
+    }
+
+    function escHtml(s) {
+      return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    function loadLog() {
+      if (refreshBtn) { refreshBtn.classList.add('loading'); }
+      logBody.innerHTML = '<div class="tg-log-loading">Loading…</div>';
+      var fd = new FormData();
+      fd.append('action', 'tg_log');
+      fetch('admin.php', { method: 'POST', body: fd })
+        .then(function (r) { return r.json(); })
+        .then(function (data) { renderLog(data); loaded = true; })
+        .catch(function () { logBody.innerHTML = '<div class="tg-log-empty">⚠ Could not load log.</div>'; })
+        .finally(function () { if (refreshBtn) refreshBtn.classList.remove('loading'); });
+    }
+
+    // Load when Telegram sidebar item is clicked.
+    if (tgSideItem) {
+      tgSideItem.addEventListener('click', function () {
+        if (!loaded) loadLog();
+      });
+    }
+
+    // Refresh button.
+    if (refreshBtn) {
+      refreshBtn.addEventListener('click', loadLog);
+    }
+
+    // If the page loads directly on the telegram panel, load immediately.
+    if (document.getElementById('tgForm') && document.getElementById('tgForm').classList.contains('active')) {
+      loadLog();
+    }
+  })();
   </script>
 
   <script>
