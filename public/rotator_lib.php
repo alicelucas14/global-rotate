@@ -256,8 +256,9 @@ function rotator_check_url($url) {
 
 /** Check every enabled brand's target URLs and persist the results. */
 function rotator_run_checks() {
-    $data   = rotator_load();
-    $checks = [];
+    $data           = rotator_load();
+    $existingChecks = rotator_checks_load();
+    $checks         = [];
     foreach ($data['rules'] as $rule) {
         if (empty($rule['enabled'])) continue;
         $slug = rotator_slug($rule['slug'] ?? $rule['label'] ?? '');
@@ -266,9 +267,19 @@ function rotator_run_checks() {
         foreach (($rule['targets'] ?? []) as $t) {
             $u = rotator_norm_url($t);
             if ($u === '') continue;
-            $r = rotator_check_url($u);
-            $r['ts'] = gmdate('c');
-            $checks[$slug][$u] = $r;
+
+            $prev = $existingChecks[$slug][$u] ?? null;
+            // Preserve Telegram block alerts — do NOT let server cURL checks from outside Indonesia overwrite them to clean!
+            if ($prev && isset($prev['status']) && $prev['status'] === 'blocked' && (
+                (!empty($prev['source']) && $prev['source'] === 'telegram') ||
+                strpos($prev['reason'] ?? '', 'Telegram') !== false
+            )) {
+                $checks[$slug][$u] = $prev;
+            } else {
+                $r = rotator_check_url($u);
+                $r['ts'] = gmdate('c');
+                $checks[$slug][$u] = $r;
+            }
         }
     }
     rotator_checks_save($checks);
@@ -308,9 +319,7 @@ function rotator_pool_save($urls) {
  * Mark every occurrence of $domain as 'blocked' across all brand checks.
  *
  * Called by tg-webhook.php the moment a Komdigi/ISP block alert arrives.
- * The domain is matched against the host part of every target URL in every
- * enabled rule; matching entries are written to rotator-checks.json so that
- * the gateway's PHP candidate filter (index.php) skips them immediately.
+ * Verified: matches only domains configured in enabled rules/targets.
  *
  * Returns the number of URL entries that were updated.
  */
@@ -341,6 +350,7 @@ function rotator_mark_blocked($domain) {
                 $checks[$slug][$u] = [
                     'status' => 'blocked',
                     'reason' => 'Komdigi/ISP block alert via Telegram',
+                    'source' => 'telegram',
                     'http'   => 0,
                     'ts'     => $now,
                 ];

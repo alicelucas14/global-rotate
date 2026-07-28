@@ -121,6 +121,27 @@ $text = $msg['text'] ?? $msg['caption'] ?? '';
 if ($text === '') exit;
 
 /* ------------------------------------------------------------------ */
+/* 1. Ignore replacement, addition, subscription, & command messages */
+/* ------------------------------------------------------------------ */
+$ignorePatterns = [
+    '/\b(replace|replaced|adding|added|new domain|subscription|cekipos id|renewal date|active domains)\b/i',
+    '/^\s*\/[a-z0-9_]+/i', // Bot commands like /replace, /info, /help
+];
+foreach ($ignorePatterns as $ip) {
+    if (preg_match($ip, $text)) {
+        exit; // Ignore silently
+    }
+}
+
+/* ------------------------------------------------------------------ */
+/* 2. Require message to be an actual block alert                      */
+/* ------------------------------------------------------------------ */
+$isBlockAlert = preg_match('/(komdigi|internet\s*positif|trust\s*positif|pemblokiran|diblokir|shows\s+blocked|block\s*alert)/i', $text);
+if (!$isBlockAlert) {
+    exit; // Not a block alert message
+}
+
+/* ------------------------------------------------------------------ */
 /* Extract blocked domain from the Komdigi alert message              */
 /*                                                                     */
 /* Handled formats:                                                    */
@@ -130,18 +151,18 @@ if ($text === '') exit;
 
 $domain = null;
 
-// Pattern 1: "Domain <domain> shows blocked" (most specific)
+// Pattern 1: "Domain <domain> shows blocked"
 if (preg_match('/Domain\s+([\w][\w.-]*\.[a-z]{2,})\s+shows\s+blocked/i', $text, $m)) {
     $domain = strtolower(trim($m[1]));
 }
 
-// Pattern 2: domain directly before "Komdigi"
-if (!$domain && preg_match('/([\w][\w.-]*\.[a-z]{2,})\s+Komdigi/i', $text, $m)) {
+// Pattern 2: domain directly preceding/following "Komdigi Alert" or "Komdigi"
+if (!$domain && preg_match('/([\w][\w.-]*\.[a-z]{2,})\s+(?:Komdigi\s+Alert|Komdigi)/i', $text, $m)) {
     $domain = strtolower(trim($m[1]));
 }
 
-// Pattern 3: first standalone domain-looking token in the message
-if (!$domain && preg_match('/\b([\w][\w-]*\.[a-z]{2,}(?:\.[a-z]{2})?)\b/i', $text, $m)) {
+// Pattern 3: domain adjacent to block alert keywords
+if (!$domain && preg_match('/\b([\w][\w-]*\.[a-z]{2,}(?:\.[a-z]{2})?)\b(?=.*(?:komdigi|blocked|diblokir))/i', $text, $m)) {
     $candidate = strtolower($m[1]);
     $ignore    = ['t.me', 'telegram.org', 'bit.ly', 'tinyurl.com', 'komdigi.go.id', 'trust.id'];
     if (!in_array($candidate, $ignore, true)) {
@@ -150,7 +171,6 @@ if (!$domain && preg_match('/\b([\w][\w-]*\.[a-z]{2,}(?:\.[a-z]{2})?)\b/i', $tex
 }
 
 if (!$domain) {
-    // No domain found — still log the chat_id so we can discover the group ID.
     $logPath = __DIR__ . '/../tg-webhook.log';
     $chatId  = (string)($msg['chat']['id'] ?? 'unknown');
     $logLine = gmdate('c') . "\tchat_id=" . $chatId . "\t[no domain]\t0 URL(s) marked\t" . trim(preg_replace('/\s+/', ' ', $text)) . PHP_EOL;
