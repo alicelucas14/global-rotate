@@ -325,7 +325,7 @@ function rotator_pool_save($urls) {
  */
 function rotator_mark_blocked($domain) {
     $domain = strtolower(trim((string)$domain));
-    $domain = preg_replace('/^www\./', '', $domain); // strip leading www
+    $domain = rtrim(preg_replace('/^www\./', '', $domain), '.'); // strip leading www and trailing dot
     if ($domain === '') return 0;
 
     $data   = rotator_load();
@@ -343,7 +343,7 @@ function rotator_mark_blocked($domain) {
             if ($u === '') continue;
 
             $urlHost = strtolower((string)parse_url($u, PHP_URL_HOST));
-            $urlHost = preg_replace('/^www\./', '', $urlHost);
+            $urlHost = rtrim(preg_replace('/^www\./', '', $urlHost), '.');
 
             if ($urlHost === $domain) {
                 if (!isset($checks[$slug])) $checks[$slug] = [];
