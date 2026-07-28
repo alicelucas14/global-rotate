@@ -1253,7 +1253,7 @@ $current_user = rotator_auth_user();
           item.classList.remove('alert');
           return;
         }
-        var firstKey = null;
+        var firstCleanFound = false;
         targets.forEach(function(u, idx){
           var c = ck[u]; var v = vs[u];
           var badgeCls='badge-wait', txt='NOT CHECKED', reason='Not checked yet', when='';
@@ -1265,7 +1265,14 @@ $current_user = rotator_auth_user();
           else if (c && c.status==='down'){    badgeCls='badge-down';    txt='DOWN';    reason=c.reason||''; when='checked '+timeAgo(c.ts); }
           else if (v && v.status==='active'){  badgeCls='badge-clean';   txt='CLEAN';   reason='Serving players'; when=timeAgo(v.ts); }
           else if (v && v.status==='blocked'){ badgeCls='badge-blocked'; txt='BLOCKED'; reason='Reported blocked by visitor'; when=timeAgo(v.ts); }
-          var inUse = (v && v.status==='active');
+          
+          // IN USE belongs exclusively to the top active clean domain currently serving players
+          var inUse = false;
+          if (badgeCls === 'badge-clean' && !firstCleanFound) {
+            inUse = true;
+            firstCleanFound = true;
+          }
+
           if (idx===0) firstKey = (badgeCls==='badge-clean'?'clean':badgeCls==='badge-blocked'?'blocked':badgeCls==='badge-down'?'down':'unknown');
 
           var row   = document.createElement('div'); row.className = 'st-row';
