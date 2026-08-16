@@ -39,9 +39,9 @@ function rotator_save($data) {
 
 function rotator_norm_host($h) {
     $h = strtolower(trim((string)$h));
-    $h = preg_replace('#^https?://#i', '', $h); // strip protocol scheme if present
-    $h = preg_replace('#[/\\\\?#].*+$#', '', $h); // strip path / query / trailing slash
-    $h = preg_replace('/:\d+$/', '', $h); // strip port
+    $h = preg_replace('~^https?://~i', '', $h); // strip protocol scheme if present
+    $h = preg_replace('~[/?#].*+$~', '', $h);   // strip path / query / trailing slash
+    $h = preg_replace('~:\d+$~', '', $h);      // strip port
     return $h;
 }
 
