@@ -136,33 +136,34 @@ foreach ($ignorePatterns as $ip) {
 /* ------------------------------------------------------------------ */
 /* 2. Require message to be an actual block alert                      */
 /* ------------------------------------------------------------------ */
-$isBlockAlert = preg_match('/(komdigi|internet\s*positif|trust\s*positif|pemblokiran|diblokir|shows\s+blocked|block\s*alert)/i', $text);
+$isBlockAlert = preg_match('/(komdigi|internet\s*positif|trust\s*\+?\s*positif|pemblokiran|diblokir|terblokir|blokir|shows\s+blocked|block\s*alert|nawala|aduankonten)/i', $text);
 if (!$isBlockAlert) {
     exit; // Not a block alert message
 }
 
 /* ------------------------------------------------------------------ */
-/* Extract blocked domain from the Komdigi alert message              */
+/* Extract blocked domain from the Komdigi/CekiPos alert message       */
 /*                                                                     */
 /* Handled formats:                                                    */
 /*   "❌ gamegold888.sbs Komdigi Alert! ❌"                           */
 /*   "🚫 Domain gamegold888.sbs shows blocked status by Komdigi."     */
+/*   "gamegold888.sbs diblokir oleh Internet Positif"                 */
 /* ------------------------------------------------------------------ */
 
 $domain = null;
 
-// Pattern 1: "Domain <domain> shows blocked"
-if (preg_match('/Domain\s+([\w][\w.-]*\.[a-z]{2,})\s+shows\s+blocked/i', $text, $m)) {
+// Pattern 1: "Domain <domain> shows blocked" / "<domain> is blocked / diblokir / terblokir"
+if (preg_match('/(?:domain\s+)?([\w][\w.-]*\.[a-z]{2,})\s+(?:shows\s+blocked|is\s+blocked|diblokir|terblokir|blokir)/i', $text, $m)) {
     $domain = strtolower(trim($m[1]));
 }
 
-// Pattern 2: domain directly preceding/following "Komdigi Alert" or "Komdigi"
-if (!$domain && preg_match('/([\w][\w.-]*\.[a-z]{2,})\s+(?:Komdigi\s+Alert|Komdigi)/i', $text, $m)) {
+// Pattern 2: domain directly preceding/following "Komdigi Alert", "Komdigi", "Internet Positif", etc.
+if (!$domain && preg_match('/([\w][\w.-]*\.[a-z]{2,})\s+(?:Komdigi\s+Alert|Komdigi|Internet\s*Positif|Block\s*Alert)/i', $text, $m)) {
     $domain = strtolower(trim($m[1]));
 }
 
 // Pattern 3: domain adjacent to block alert keywords
-if (!$domain && preg_match('/\b([\w][\w-]*\.[a-z]{2,}(?:\.[a-z]{2})?)\b(?=.*(?:komdigi|blocked|diblokir))/i', $text, $m)) {
+if (!$domain && preg_match('/\b([\w][\w-]*\.[a-z]{2,}(?:\.[a-z]{2})?)\b(?=.*(?:komdigi|blocked|diblokir|terblokir|pemblokiran|nawala))/i', $text, $m)) {
     $candidate = strtolower($m[1]);
     $ignore    = ['t.me', 'telegram.org', 'bit.ly', 'tinyurl.com', 'komdigi.go.id', 'trust.id'];
     if (!in_array($candidate, $ignore, true)) {
