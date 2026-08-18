@@ -307,9 +307,31 @@ $candidates = array_merge($cleanCands, $blockedCands);
       });
     }
 
+    function getFinalUrl(baseUrl) {
+      try {
+        var dest = new URL(baseUrl);
+        var path = location.pathname || '';
+        if (path && path !== '/') {
+          dest.pathname = (dest.pathname.replace(/\/$/, '') + '/' + path.replace(/^\//, '')).replace(/\/+$/, '');
+        }
+        if (location.search) {
+          var incomingParams = new URLSearchParams(location.search);
+          incomingParams.forEach(function (val, key) {
+            if (key !== 'b') {
+              dest.searchParams.set(key, val);
+            }
+          });
+        }
+        return dest.toString();
+      } catch (e) {
+        return baseUrl;
+      }
+    }
+
     function go(url) {
+      var finalUrl = getFinalUrl(url);
       try { localStorage.setItem(LAST_GOOD_KEY, url); } catch (e) {}
-      window.location.replace(url);
+      window.location.replace(finalUrl);
     }
 
     function showManual(list) {
@@ -323,8 +345,9 @@ $candidates = array_merge($cleanCands, $blockedCands);
         return;
       }
       list.forEach(function (u) {
+        var targetUrl = getFinalUrl(u);
         var a = document.createElement('a');
-        a.href = u; a.textContent = u.replace(/^https?:\/\//, '');
+        a.href = targetUrl; a.textContent = targetUrl.replace(/^https?:\/\//, '');
         a.rel = 'noopener';
         box.appendChild(a);
       });
