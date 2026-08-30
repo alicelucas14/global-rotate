@@ -124,7 +124,7 @@ if ($text === '') exit;
 /* 1. Ignore replacement, addition, subscription, & command messages */
 /* ------------------------------------------------------------------ */
 $ignorePatterns = [
-    '/\b(replace|replaced|adding|added|new domain|subscription|cekipos id|renewal date|active domains)\b/i',
+    '/\b(replace|replaced|adding|added|new domain|subscription|cekipos id|renewal date|active domains|status report|rotator status|health check|all domains|domain list)\b/i',
     '/^\s*\/[a-z0-9_]+/i', // Bot commands like /replace, /info, /help
 ];
 foreach ($ignorePatterns as $ip) {
@@ -153,7 +153,7 @@ if (!$isBlockAlert) {
 $domain = null;
 
 // Pattern 1: "Domain <domain> shows blocked" / "<domain> is blocked / diblokir / terblokir"
-if (preg_match('/(?:domain\s+)?([\w][\w.-]*\.[a-z]{2,})\s+(?:shows\s+blocked|is\s+blocked|diblokir|terblokir|blokir)/i', $text, $m)) {
+if (preg_match('/(?:domain|situs|link|url\s+)?([\w][\w.-]*\.[a-z]{2,})\s+(?:shows\s+blocked|is\s+blocked|diblokir|terblokir|blokir)/i', $text, $m)) {
     $domain = strtolower(trim($m[1]));
 }
 
@@ -162,14 +162,15 @@ if (!$domain && preg_match('/([\w][\w.-]*\.[a-z]{2,})\s+(?:Komdigi\s+Alert|Komdi
     $domain = strtolower(trim($m[1]));
 }
 
-// Pattern 3: domain adjacent to block alert keywords
-if (!$domain && preg_match('/\b([\w][\w-]*\.[a-z]{2,}(?:\.[a-z]{2})?)\b(?=.*(?:komdigi|blocked|diblokir|terblokir|pemblokiran|nawala))/i', $text, $m)) {
+// Pattern 3: Explicit block declaration ("situs/domain <name> diblokir")
+if (!$domain && preg_match('/(?:situs|domain|url|link)\s+([\w][\w-]*\.[a-z]{2,}(?:\.[a-z]{2})?)\s+(?:diblokir|terblokir|komdigi|nawala)/i', $text, $m)) {
     $candidate = strtolower($m[1]);
     $ignore    = ['t.me', 'telegram.org', 'bit.ly', 'tinyurl.com', 'komdigi.go.id', 'trust.id'];
     if (!in_array($candidate, $ignore, true)) {
         $domain = $candidate;
     }
 }
+
 
 if (!$domain) {
     $logPath = __DIR__ . '/../tg-webhook.log';

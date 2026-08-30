@@ -220,10 +220,11 @@ function rotator_check_url($url) {
 
     if ($errno) {
         $reason = ($errno === 28)
-            ? 'Connection timed out (often an ISP block or the site is offline)'
-            : 'Connection failed (reset/refused — possible block)';
-        return ['status' => 'blocked', 'reason' => $reason, 'http' => 0];
+            ? 'Connection timed out (server network delay or site offline)'
+            : 'Connection failed (reset/refused — site offline)';
+        return ['status' => 'down', 'reason' => $reason, 'http' => 0];
     }
+
 
     // 3. Block-page detection (Internet Positif / Trust+ / ISP notices)
     $hay = strtolower($final . ' ' . substr((string)$body, 0, 5000));
