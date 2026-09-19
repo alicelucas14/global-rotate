@@ -32,15 +32,30 @@ if (!in_array($scheme, ['http', 'https'], true)) {
 
 $STALE_SEC = 300; // 5 minutes — re-check if cached result is older than this
 
-// Load cached check results
+// Load cached check results.
+// rotator-checks.json is a nested structure: { brandSlug: { fullUrl: { status, ts, ... } } }
+// We must search all brands for a matching URL key.
 $checks = rotator_checks_load();
+$normUrl = rtrim($url, '/');
 
-// Normalise URL to the key used by checker.php (strip scheme + www)
-$key1 = rtrim(preg_replace('#^https?://(?:www\.)?#i', '', $url), '/'); // no scheme, no www
-$key2 = rtrim(preg_replace('#^https?://#i',            '', $url), '/'); // no scheme, with www
-
-$info = $checks[$key1] ?? $checks[$key2] ?? null;
-$age  = $info ? (int)(time() - (int)($info['checked_at'] ?? 0)) : PHP_INT_MAX;
+$info = null;
+foreach ($checks as $brandChecks) {
+    if (!is_array($brandChecks)) continue;
+    // Try exact normalised URL first (the key used by rotator_lib.php).
+    if (isset($brandChecks[$normUrl])) {
+        $info = $brandChecks[$normUrl];
+        break;
+    }
+    // Also try with trailing slash stripped from stored key variants.
+    foreach ($brandChecks as $storedUrl => $entry) {
+        if (rtrim((string)$storedUrl, '/') === $normUrl) {
+            $info = $entry;
+            break 2;
+        }
+    }
+}
+// Timestamp is stored under 'ts' (ISO 8601 string), not 'checked_at'.
+$age = ($info && !empty($info['ts'])) ? (int)(time() - (int)strtotime($info['ts'])) : PHP_INT_MAX;
 
 if ($info && $age < $STALE_SEC) {
     // Return fresh cached result — no live check needed
