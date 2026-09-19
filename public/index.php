@@ -240,6 +240,10 @@ $candidates = array_merge($cleanCands, $blockedCands);
     // Priority: brand-specific targets first, then global pool domains as backup.
     var CANDIDATES = <?php echo json_encode($candidates, JSON_UNESCAPED_SLASHES); ?>;
     var BRAND = <?php echo json_encode($ruleSlug, JSON_UNESCAPED_SLASHES); ?>;
+    // Server-side known-blocked domains (Telegram alerts + cron checks).
+    // Used to skip the localStorage shortcut for a domain that has been blocked
+    // since the visitor's last successful visit.
+    var BLOCKED_CANDS = <?php echo json_encode(array_values($blockedCands), JSON_UNESCAPED_SLASHES); ?>;
 
     // Tell the admin which target we used and which we had to skip.
     function report(activeUrl, blockedList) {
@@ -359,7 +363,10 @@ $candidates = array_merge($cleanCands, $blockedCands);
 
       var last = null;
       try { last = localStorage.getItem(LAST_GOOD_KEY); } catch (e) {}
-      if (last && list.indexOf(last) !== -1) {
+      // Only use the localStorage shortcut if the cached domain is not in the
+      // server-side blocked list. Blocked domains can still respond to HTTP from
+      // outside Indonesia, so probe() alone cannot reliably rule them out.
+      if (last && list.indexOf(last) !== -1 && BLOCKED_CANDS.indexOf(norm(last)) === -1) {
         if (await probe(last) === 'ok') { report(last, []); return go(last); }
       }
       // Only DEFINITIVE failures (DNS/connection reject) are reported as blocked.

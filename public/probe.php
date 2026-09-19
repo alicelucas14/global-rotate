@@ -68,6 +68,14 @@ if ($info && $age < $STALE_SEC) {
     exit;
 }
 
+// Blocked domains: trust the cached verdict for 24 h even if stale.
+// A server-side HEAD from outside Indonesia will succeed even for ISP-blocked
+// domains, so we must NOT let a stale live-check override a verified block.
+if ($info && ($info['status'] ?? '') === 'blocked' && $age < 86400) {
+    echo json_encode(['ok' => false, 'status' => 'blocked', 'age' => $age, 'cached' => true]);
+    exit;
+}
+
 // Cache is stale or missing — do a fast live HEAD request
 if (!function_exists('curl_init')) {
     echo json_encode(['ok' => false, 'status' => 'no_curl']);
