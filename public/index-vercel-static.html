@@ -7,162 +7,295 @@
   <title>Menghubungkan…</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+  <script src="tornado.js"></script>
   <style>
-    /* Follows the visitor's OS theme. No toggle: this page is on screen for
-       about a second before the redirect fires, so there is nothing to toggle. */
-    :root {
-      color-scheme: dark light;
-      --bg-a: #0a1628; --bg-b: #060c1a; --bg-c: #0f2040;
-      --text: #e8edf8; --text-2: #9ab0d4; --muted: #4e6285;
-      --card-bg: rgba(15,28,60,.55); --card-border: rgba(100,150,255,.12);
-      --track: rgba(255,255,255,.12); --accent: #4f8cff;
-      --link-fg: #c8dcff; --link-bg: rgba(79,140,255,.14);
-      --link-border: rgba(79,140,255,.32);
-      --link-hover-bg: rgba(79,140,255,.24);
+    #tornado-bg {
+      position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0;
+      pointer-events: none; background: #11143C;
+      transition: opacity 0.35s ease;
     }
     @media (prefers-color-scheme: light) {
-      :root {
-        --bg-a: #dce8fb; --bg-b: #f0f4fc; --bg-c: #c8ddf8;
-        --text: #131a2e; --text-2: #4a5e7a; --muted: #7a90b0;
-        --card-bg: rgba(255,255,255,.72); --card-border: rgba(47,111,228,.14);
-        --track: rgba(19,26,42,.1); --accent: #2f6fe4;
-        --link-fg: #1a4fb0; --link-bg: rgba(47,111,228,.1);
-        --link-border: rgba(47,111,228,.28);
-        --link-hover-bg: rgba(47,111,228,.18);
-      }
+      #tornado-bg { opacity: 0.25; }
     }
+    :root {
+      color-scheme: dark light;
+      --font: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      --font-mono: 'JetBrains Mono', 'SF Mono', monospace;
+
+      /* Deep Space Obsidian */
+      --bg: #070b14;
+      --bg-gradient: radial-gradient(ellipse 100% 80% at 50% -10%, #172554, #0b1120 50%, #070b14 100%);
+      --text: #f8fafc;
+      --text-2: #cbd5e1;
+      --muted: #64748b;
+      
+      --card-bg: rgba(15, 23, 42, 0.72);
+      --card-border: rgba(255, 255, 255, 0.1);
+      --card-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+      --card-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.05);
+
+      --track: rgba(255, 255, 255, 0.08);
+      --accent: #3b82f6;
+      --accent-glow: rgba(59, 130, 246, 0.4);
+      --accent-2: #60a5fa;
+
+      --badge-bg: rgba(59, 130, 246, 0.12);
+      --badge-border: rgba(59, 130, 246, 0.28);
+      --badge-text: #93c5fd;
+
+      --link-fg: #93c5fd;
+      --link-bg: rgba(59, 130, 246, 0.1);
+      --link-border: rgba(59, 130, 246, 0.25);
+      --link-hover-bg: rgba(59, 130, 246, 0.2);
+      --link-hover-border: rgba(96, 165, 250, 0.45);
+    }
+
+
 
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
-      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      font-family: var(--font);
       min-height: 100vh; display: grid; place-items: center;
-      color: var(--text); overflow: hidden;
-      -webkit-font-smoothing: antialiased;
+      background: var(--bg); color: var(--text); overflow: hidden;
+      -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+      text-rendering: optimizeLegibility;
     }
 
-    /* layered animated background */
+    /* Ambient animated lighting */
     .bg {
       position: fixed; inset: 0; z-index: 0;
-      background: radial-gradient(ellipse 120% 80% at 50% -10%, var(--bg-c), var(--bg-a) 55%, var(--bg-b));
+      background: var(--bg-gradient);
     }
     .orb {
-      position: absolute; border-radius: 50%; filter: blur(70px);
-      animation: drift 12s ease-in-out infinite alternate;
+      position: absolute; border-radius: 50%; filter: blur(80px);
+      animation: drift 14s ease-in-out infinite alternate;
     }
     .orb-1 {
-      width: 420px; height: 420px; top: -120px; left: -80px;
-      background: radial-gradient(circle, rgba(79,140,255,.18), transparent 70%);
-      animation-duration: 14s;
+      width: 480px; height: 480px; top: -140px; left: -100px;
+      background: radial-gradient(circle, rgba(59, 130, 246, 0.22), transparent 70%);
+      animation-duration: 16s;
     }
     .orb-2 {
-      width: 360px; height: 360px; bottom: -100px; right: -60px;
-      background: radial-gradient(circle, rgba(139,92,246,.14), transparent 70%);
-      animation-duration: 18s; animation-delay: -6s;
+      width: 420px; height: 420px; bottom: -120px; right: -80px;
+      background: radial-gradient(circle, rgba(99, 102, 241, 0.18), transparent 70%);
+      animation-duration: 20s; animation-delay: -7s; animation-name: drift2;
     }
     .orb-3 {
-      width: 280px; height: 280px; top: 50%; left: 50%;
-      transform: translate(-50%,-50%);
-      background: radial-gradient(circle, rgba(79,140,255,.08), transparent 70%);
-      animation-duration: 10s; animation-delay: -3s;
+      width: 320px; height: 320px; top: 45%; left: 50%;
+      transform: translate(-50%, -50%);
+      background: radial-gradient(circle, rgba(16, 185, 129, 0.08), transparent 70%);
+      animation-duration: 12s; animation-delay: -3s;
     }
     @keyframes drift {
       from { transform: translate(0, 0) scale(1); }
-      to   { transform: translate(30px, 20px) scale(1.08); }
+      to   { transform: translate(35px, 25px) scale(1.1); }
     }
-    .orb-2 { animation-name: drift2; }
     @keyframes drift2 {
       from { transform: translate(0, 0) scale(1); }
-      to   { transform: translate(-25px, -15px) scale(1.06); }
+      to   { transform: translate(-30px, -20px) scale(1.08); }
     }
     @media (prefers-reduced-motion: reduce) {
-      .spinner-arc { animation-duration: 3s; }
-      .orb { animation: none; }
+      .spinner-arc, .orb { animation: none; }
     }
 
-    /* card */
-    .wrap { position: relative; z-index: 1; }
+    @property --pulse-angle {
+      syntax: '<angle>';
+      initial-value: 0deg;
+      inherits: false;
+    }
+
+    @keyframes pulseBorderRotate {
+      0%   { --pulse-angle: 0deg; filter: hue-rotate(0deg); }
+      100% { --pulse-angle: 360deg; filter: hue-rotate(360deg); }
+    }
+
+    @keyframes pulseBorderGlow {
+      0%, 100% {
+        opacity: 0.5;
+        filter: blur(20px) saturate(1.4);
+        transform: scale(0.992);
+      }
+      50% {
+        opacity: 0.9;
+        filter: blur(30px) saturate(1.9);
+        transform: scale(1.018);
+      }
+    }
+
+    /* Gateway Card with OriginKit Pulsating Border */
+    .wrap { position: relative; z-index: 1; padding: 24px; }
     .card {
-      text-align: center; padding: 40px 32px; max-width: 420px; width: 92vw;
+      text-align: center; padding: 44px 36px; max-width: 440px; width: 92vw;
       background: var(--card-bg); border: 1px solid var(--card-border);
-      border-radius: 24px; backdrop-filter: blur(20px) saturate(1.3);
-      -webkit-backdrop-filter: blur(20px) saturate(1.3);
-      box-shadow: 0 8px 40px rgba(0,0,0,.25), 0 0 0 1px rgba(255,255,255,.04);
-      animation: riseIn .5s cubic-bezier(.22,.68,0,1.2) both;
+      border-radius: 26px; backdrop-filter: blur(28px) saturate(1.4);
+      -webkit-backdrop-filter: blur(28px) saturate(1.4);
+      box-shadow: var(--card-shadow), var(--card-highlight);
+      position: relative;
+      animation: riseIn 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+      z-index: 1;
     }
-    @keyframes riseIn {
-      from { opacity: 0; transform: translateY(24px) scale(.96); }
-      to   { opacity: 1; transform: translateY(0)    scale(1); }
+    .card > * {
+      position: relative;
+      z-index: 3;
     }
 
-    /* gradient spinner */
+    /* Outer Pulsating Bloom / Smoke strictly at the edge */
+    .card::before {
+      content: '';
+      position: absolute;
+      inset: -14px;
+      border-radius: inherit;
+      padding: 16px;
+      background: conic-gradient(
+        from var(--pulse-angle, 0deg),
+        #F2244F 0%,
+        transparent 15%,
+        #4DA6E6 33%,
+        transparent 48%,
+        #379590 66%,
+        transparent 82%,
+        #F2244F 100%
+      );
+      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor;
+      mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      mask-composite: exclude;
+      filter: blur(12px);
+      opacity: 0.75;
+      z-index: -2;
+      pointer-events: none;
+      animation: pulseBorderRotate 6s linear infinite, pulseBorderGlow 3.8s ease-in-out infinite;
+    }
+
+    /* Crisp Pulsating Border Edge Line */
+    .card::after {
+      content: '';
+      position: absolute;
+      inset: -2px;
+      border-radius: inherit;
+      padding: 2.5px;
+      background: conic-gradient(
+        from var(--pulse-angle, 0deg),
+        #F2244F 0%,
+        transparent 18%,
+        #4DA6E6 33%,
+        transparent 51%,
+        #379590 66%,
+        transparent 84%,
+        #F2244F 100%
+      );
+      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor;
+      mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      mask-composite: exclude;
+      z-index: 2;
+      pointer-events: none;
+      animation: pulseBorderRotate 6s linear infinite;
+    }
+
+    @keyframes riseIn {
+      from { opacity: 0; transform: translateY(22px) scale(0.97); }
+      to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    /* Security shield badge */
+    .shield-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 5px 12px; border-radius: 9999px;
+      background: var(--badge-bg); border: 1px solid var(--badge-border);
+      color: var(--badge-text); font-size: 0.7rem; font-weight: 700;
+      letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 24px;
+    }
+
+    /* High-tech Gradient Spinner */
     .spinner-wrap {
-      position: relative; width: 54px; height: 54px; margin: 0 auto 22px;
+      position: relative; width: 58px; height: 58px; margin: 0 auto 24px;
+      transition: opacity 0.25s ease, height 0.25s ease, margin 0.25s ease;
+    }
+    .spinner-wrap[style*="opacity: 0"] {
+      height: 0; margin-bottom: 0; overflow: hidden;
     }
     .spinner-ring {
       position: absolute; inset: 0; border-radius: 50%;
-      border: 3.5px solid var(--track);
+      border: 3px solid var(--track);
     }
     .spinner-arc {
       position: absolute; inset: 0; border-radius: 50%;
-      border: 3.5px solid transparent;
+      border: 3px solid transparent;
       border-top-color: var(--accent);
-      border-right-color: rgba(79,140,255,.4);
-      animation: spin .85s linear infinite;
+      border-right-color: var(--accent-2);
+      box-shadow: 0 0 16px var(--accent-glow);
+      animation: spin 0.85s linear infinite;
     }
     .spinner-dot {
-      position: absolute; width: 8px; height: 8px; border-radius: 50%;
+      position: absolute; width: 9px; height: 9px; border-radius: 50%;
       background: var(--accent); top: 50%; left: 50%;
-      transform: translate(-50%,-50%);
-      animation: pulse 1.7s ease-in-out infinite;
+      transform: translate(-50%, -50%);
+      box-shadow: 0 0 10px var(--accent-glow);
+      animation: pulse 1.6s ease-in-out infinite;
     }
     @keyframes spin  { to { transform: rotate(360deg); } }
     @keyframes pulse {
-      0%,100% { transform: translate(-50%,-50%) scale(1); opacity:.8; }
-      50%      { transform: translate(-50%,-50%) scale(1.5); opacity:.3; }
+      0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.9; }
+      50%      { transform: translate(-50%, -50%) scale(1.4); opacity: 0.4; }
     }
 
-    /* text */
+    /* Typography */
     h1 {
-      font-size: 1.1rem; font-weight: 600; letter-spacing: -.01em;
-      margin: 0 0 6px; animation: fadeSlide .4s .15s ease both;
+      font-size: 1.2rem; font-weight: 700; letter-spacing: -0.018em;
+      margin: 0 0 8px; line-height: 1.35;
+      animation: fadeSlide 0.4s 0.15s ease both;
     }
     p {
-      margin: 4px 0; font-size: .88rem; color: var(--text-2);
-      animation: fadeSlide .4s .25s ease both;
+      margin: 4px 0; font-size: 0.9rem; color: var(--text-2);
+      animation: fadeSlide 0.4s 0.22s ease both; line-height: 1.5;
     }
     @keyframes fadeSlide {
       from { opacity: 0; transform: translateY(6px); }
       to   { opacity: 1; transform: translateY(0); }
     }
 
-    /* manual links */
-    .links { margin-top: 20px; display: none; }
-    .links > p { font-size: .82rem; color: var(--text-2); margin-bottom: 10px; }
+    /* Fallback Manual Links */
+    .links { margin-top: 22px; display: none; }
+    .links > p { font-size: 0.82rem; color: var(--text-2); margin-bottom: 12px; }
     .links a {
-      display: flex; align-items: center; justify-content: center;
-      margin: 8px 0; padding: 12px 16px; border-radius: 14px;
+      display: flex; align-items: center; justify-content: space-between;
+      margin: 8px 0; padding: 13px 18px; border-radius: 14px;
       text-decoration: none; color: var(--link-fg);
       background: var(--link-bg); border: 1px solid var(--link-border);
-      font-weight: 600; font-size: .88rem;
-      transition: background .15s, transform .12s;
+      font-weight: 600; font-size: 0.88rem; font-family: var(--font-mono);
+      transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
     }
-    .links a:hover { background: var(--link-hover-bg); transform: translateY(-1px); }
+    .links a::after {
+      content: '→'; font-size: 1rem; opacity: 0.7; transition: transform 0.15s ease;
+    }
+    .links a:hover {
+      background: var(--link-hover-bg); border-color: var(--link-hover-border);
+      transform: translateY(-2px); box-shadow: 0 4px 16px var(--accent-glow);
+    }
+    .links a:hover::after { transform: translateX(3px); opacity: 1; }
+
     .small {
-      font-size: .72rem; color: var(--muted); margin-top: 16px;
-      animation: fadeSlide .4s .35s ease both;
+      font-size: 0.74rem; color: var(--muted); margin-top: 20px;
+      display: flex; align-items: center; justify-content: center; gap: 6px;
+      animation: fadeSlide 0.4s 0.3s ease both;
     }
+    .small-dot { width: 5px; height: 5px; border-radius: 50%; background: #10b981; }
   </style>
 </head>
 <body>
-  <div class="bg">
-    <div class="orb orb-1"></div>
-    <div class="orb orb-2"></div>
-    <div class="orb orb-3"></div>
+  <div id="tornado-bg">
+    <canvas id="tornado-canvas"></canvas>
   </div>
   <div class="wrap">
     <div class="card">
+      <div class="shield-badge">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        <span>Jalur Cepat &bull; Auto Failover</span>
+      </div>
       <div class="spinner-wrap" id="spinnerWrap">
         <div class="spinner-ring"></div>
         <div class="spinner-arc"></div>
@@ -173,7 +306,10 @@
       <div class="links" id="links">
         <p>Jika tidak dialihkan otomatis, pilih link di bawah:</p>
       </div>
-      <div class="small">Anda akan dialihkan secara otomatis.</div>
+      <div class="small">
+        <span class="small-dot"></span>
+        <span>Anda akan dialihkan secara otomatis</span>
+      </div>
     </div>
   </div>
 
@@ -299,6 +435,10 @@
         pickAndGo(list);
       })
       .catch(function () { pickAndGo(CANDIDATES.map(norm)); });
+
+    if (window.initTornado) {
+      window.initTornado("tornado-canvas", "tornado-bg");
+    }
   })();
   </script>
 </body>
