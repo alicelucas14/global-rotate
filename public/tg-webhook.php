@@ -15,7 +15,11 @@
  * That URL calls Telegram to register this file as the webhook endpoint.
  */
 
-require __DIR__ . '/admin_config.php';
+if (file_exists(__DIR__ . '/admin_config.php')) {
+    require __DIR__ . '/admin_config.php';
+} elseif (file_exists(__DIR__ . '/admin_config.example.php')) {
+    require __DIR__ . '/admin_config.example.php';
+}
 require __DIR__ . '/rotator_lib.php';
 
 /* ------------------------------------------------------------------ */
@@ -120,57 +124,64 @@ if (defined('TG_CHAT_ID') && TG_CHAT_ID !== '') {
 $text = $msg['text'] ?? $msg['caption'] ?? '';
 if ($text === '') exit;
 
-/* ------------------------------------------------------------------ */
-/* 1. Ignore replacement, addition, subscription, & command messages */
-/* ------------------------------------------------------------------ */
-$ignorePatterns = [
-    '/\b(replace|replaced|adding|added|new domain|subscription|cekipos id|renewal date|active domains|status report|rotator status|health check|all domains|domain list)\b/i',
-    '/^\s*\/[a-z0-9_]+/i', // Bot commands like /replace, /info, /help
-];
-foreach ($ignorePatterns as $ip) {
-    if (preg_match($ip, $text)) {
-        exit; // Ignore silently
-    }
+// Ignore bot commands like /replace, /info, /help
+if (preg_match('/^\s*\/[a-z0-9_]+/i', $text)) {
+    exit;
 }
 
 /* ------------------------------------------------------------------ */
-/* 2. Require message to be an actual block alert                      */
+/* Check if this is an actual block alert message                      */
 /* ------------------------------------------------------------------ */
-$isBlockAlert = preg_match('/(komdigi|internet\s*positif|trust\s*\+?\s*positif|pemblokiran|diblokir|terblokir|blokir|shows\s+blocked|block\s*alert|nawala|aduankonten)/i', $text);
+$isBlockAlert = (bool)preg_match('/(komdigi|internet\s*positif|trust\s*\+?\s*positif|pemblokiran|diblokir|terblokir|blokir|blocked|shows\s+blocked|block\s*alert|nawala|aduankonten)/i', $text);
+
 if (!$isBlockAlert) {
-    exit; // Not a block alert message
+    // If it's not a block alert, check ignore patterns for informational spam
+    $ignorePatterns = [
+        '/\b(replace|replaced|adding|added|new domain|subscription|cekipos id|renewal date|active domains|status report|rotator status|health check|all domains|domain list)\b/i',
+    ];
+    foreach ($ignorePatterns as $ip) {
+        if (preg_match($ip, $text)) {
+            exit;
+        }
+    }
+    exit; // Not a block alert
 }
 
 /* ------------------------------------------------------------------ */
-/* Extract blocked domain from the Komdigi/CekiPos alert message       */
-/*                                                                     */
-/* Handled formats:                                                    */
-/*   "❌ gamegold888.sbs Komdigi Alert! ❌"                           */
-/*   "🚫 Domain gamegold888.sbs shows blocked status by Komdigi."     */
-/*   "gamegold888.sbs diblokir oleh Internet Positif"                 */
+/* Extract blocked domain from the alert message                       */
+/* Clean markdown formatting: strip *, `, _, ~, and square brackets   */
 /* ------------------------------------------------------------------ */
+$cleanText = preg_replace('/[*`_~\[\]]/', ' ', $text);
+$cleanText = preg_replace('#(https?://[^\s/]+)/#i', '$1 ', $cleanText);
 
 $domain = null;
 
-// Pattern 1: "Domain <domain> shows blocked" / "<domain> is blocked / diblokir / terblokir"
-if (preg_match('/(?:domain|situs|link|url\s+)?([\w][\w.-]*\.[a-z]{2,})\s+(?:shows\s+blocked|is\s+blocked|diblokir|terblokir|blokir)/i', $text, $m)) {
+// Pattern 1: domain before block indicators (e.g. "Domain wings365games.icu shows blocked status by Komdigi")
+if (preg_match('/(?:domain|situs|link|url)?[:\s]+([\w][\w.-]*\.[a-z]{2,})[:\s]*(?:shows\s+blocked|is\s+(?:now\s+)?blocked|has\s+been\s+blocked|terblokir|diblokir|blokir|blocked)/i', $cleanText, $m)) {
     $domain = strtolower(trim($m[1]));
 }
 
-// Pattern 2: domain directly preceding/following "Komdigi Alert", "Komdigi", "Internet Positif", etc.
-if (!$domain && preg_match('/([\w][\w.-]*\.[a-z]{2,})\s+(?:Komdigi\s+Alert|Komdigi|Internet\s*Positif|Block\s*Alert)/i', $text, $m)) {
+// Pattern 2: domain with "Komdigi Alert", "Komdigi", "Internet Positif", etc.
+if (!$domain && preg_match('/(?:domain|situs|link|url)?[:\s]+([\w][\w.-]*\.[a-z]{2,})[:\s]*(?:Komdigi\s+Alert|Komdigi|Internet\s*Positif|Block\s*Alert)/i', $cleanText, $m)) {
     $domain = strtolower(trim($m[1]));
 }
 
-// Pattern 3: Explicit block declaration ("situs/domain <name> diblokir")
-if (!$domain && preg_match('/(?:situs|domain|url|link)\s+([\w][\w-]*\.[a-z]{2,}(?:\.[a-z]{2})?)\s+(?:diblokir|terblokir|komdigi|nawala)/i', $text, $m)) {
-    $candidate = strtolower($m[1]);
-    $ignore    = ['t.me', 'telegram.org', 'bit.ly', 'tinyurl.com', 'komdigi.go.id', 'trust.id'];
-    if (!in_array($candidate, $ignore, true)) {
-        $domain = $candidate;
+// Pattern 3: Explicit block indicator followed by domain (e.g. "Blocked: domain.com", "Komdigi Alert: domain.com")
+if (!$domain && preg_match('/(?:shows\s+blocked|block\s*alert|komdigi\s*alert|diblokir|terblokir|blokir|blocked|komdigi|internet\s*positif)[\s:—–-]+(?:domain|situs|link|url)?[:\s]+([\w][\w.-]*\.[a-z]{2,})/i', $cleanText, $m)) {
+    $domain = strtolower(trim($m[1]));
+}
+
+// Pattern 4: Fallback find first valid domain token in the block alert
+if (!$domain && preg_match_all('/\b([a-z0-9][a-z0-9.-]*\.[a-z]{2,})\b/i', $cleanText, $allMatches)) {
+    $ignoreHosts = ['t.me', 'telegram.org', 'bit.ly', 'tinyurl.com', 'komdigi.go.id', 'trust.id', 'kominfo.go.id', 'internetpositif.id'];
+    foreach ($allMatches[1] as $candidate) {
+        $candidate = strtolower(trim($candidate));
+        if (!in_array($candidate, $ignoreHosts, true)) {
+            $domain = $candidate;
+            break;
+        }
     }
 }
-
 
 if (!$domain) {
     $logPath = __DIR__ . '/../tg-webhook.log';

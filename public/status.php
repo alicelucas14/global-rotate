@@ -3,7 +3,11 @@
  * Returns the live status stats as JSON. Admin-only.
  * Used by admin.php to show which target is currently in use per brand.
  */
-require __DIR__ . '/admin_config.php';
+if (file_exists(__DIR__ . '/admin_config.php')) {
+    require __DIR__ . '/admin_config.php';
+} elseif (file_exists(__DIR__ . '/admin_config.example.php')) {
+    require __DIR__ . '/admin_config.example.php';
+}
 require __DIR__ . '/rotator_lib.php';
 session_start();
 

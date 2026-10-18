@@ -336,7 +336,8 @@ function rotator_mark_blocked($domain) {
     $now    = gmdate('c');
     $count  = 0;
 
-    foreach ($data['rules'] as $rule) {
+    // 1. Check all enabled brand target rules
+    foreach (($data['rules'] ?? []) as $rule) {
         if (empty($rule['enabled'])) continue;
         $slug = rotator_slug($rule['slug'] ?? $rule['label'] ?? '');
         if ($slug === '') continue;
@@ -362,7 +363,41 @@ function rotator_mark_blocked($domain) {
         }
     }
 
-    if ($count > 0) rotator_checks_save($checks);
+    // 2. Check global domain pool
+    $pool = $data['pool'] ?? [];
+    foreach ($pool as $pUrl) {
+        $u = rotator_norm_url($pUrl);
+        if ($u === '') continue;
+
+        $urlHost = strtolower((string)parse_url($u, PHP_URL_HOST));
+        $urlHost = rtrim(preg_replace('/^www\./', '', $urlHost), '.');
+
+        if ($urlHost === $domain) {
+            if (!isset($checks['global'])) $checks['global'] = [];
+            $checks['global'][$u] = [
+                'status' => 'blocked',
+                'reason' => 'Komdigi/ISP block alert via Telegram',
+                'source' => 'telegram',
+                'http'   => 0,
+                'ts'     => $now,
+            ];
+            $count++;
+        }
+    }
+
+    // 3. Always record under global so probe.php and gateway treat it as blocked
+    $defaultUrl = 'https://' . $domain;
+    if (!isset($checks['global'])) $checks['global'] = [];
+    $checks['global'][$defaultUrl] = [
+        'status' => 'blocked',
+        'reason' => 'Komdigi/ISP block alert via Telegram',
+        'source' => 'telegram',
+        'http'   => 0,
+        'ts'     => $now,
+    ];
+    $count++;
+
+    rotator_checks_save($checks);
     return $count;
 }
 

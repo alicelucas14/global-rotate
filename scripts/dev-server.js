@@ -63,14 +63,15 @@ const server = http.createServer(async (req, res) => {
 
   try {
     if (pathname.startsWith('/api/')) {
-      const name = pathname.replace('/api/', '').replace(/\/$/, '');
+      const name = pathname.replace('/api/', '').replace(/\/$/, '').replace(/[^a-z0-9-]/gi, '');
       const mod = await import(`../api/${name}.js`);
       await mod.default(req, res);
       return;
     }
 
-    if (pathname === '/' ) {
-      await serveStatic(res, 'index.html');
+    if (pathname === '/') {
+      const served = (await serveStatic(res, 'index.html')) || (await serveStatic(res, 'index-vercel-static.html'));
+      if (!served) res.status(404).send('Not found: /');
       return;
     }
 

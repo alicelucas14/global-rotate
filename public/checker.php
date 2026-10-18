@@ -10,7 +10,11 @@
  * aaPanel cron (every 5-10 min), Shell script:
  *   curl -s "https://domains-rotate.store/checker.php?key=YOUR_CHECK_KEY" > /dev/null
  */
-require __DIR__ . '/admin_config.php';
+if (file_exists(__DIR__ . '/admin_config.php')) {
+    require __DIR__ . '/admin_config.php';
+} elseif (file_exists(__DIR__ . '/admin_config.example.php')) {
+    require __DIR__ . '/admin_config.example.php';
+}
 require __DIR__ . '/rotator_lib.php';
 
 $cli = (php_sapi_name() === 'cli');

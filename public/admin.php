@@ -1,5 +1,9 @@
 <?php
-require __DIR__ . '/admin_config.php';
+if (file_exists(__DIR__ . '/admin_config.php')) {
+    require __DIR__ . '/admin_config.php';
+} elseif (file_exists(__DIR__ . '/admin_config.example.php')) {
+    require __DIR__ . '/admin_config.example.php';
+}
 require __DIR__ . '/rotator_lib.php';
 
 /* ---- Telegram config helpers ---- */
@@ -145,7 +149,9 @@ if ($action === 'save' && is_logged_in()) {
                 ];
             }
         }
-        if (rotator_save(['rules' => $rules])) {
+        $saveData = rotator_load();
+        $saveData['rules'] = $rules;
+        if (rotator_save($saveData)) {
             $notice = 'Saved successfully.';
         } else {
             $error = 'Could not write data file. Check folder permissions (the web root parent must be writable by the web user).';

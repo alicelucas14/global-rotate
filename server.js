@@ -73,13 +73,22 @@ const server = http.createServer(async (req, res) => {
   try {
     if (pathname.startsWith('/api/')) {
       const name = pathname.replace('/api/', '').replace(/\/$/, '').replace(/[^a-z0-9-]/gi, '');
-      const mod = await import(`./api/${name}.js`);
-      await mod.default(req, res);
+      try {
+        const mod = await import(`./api/${name}.js`);
+        await mod.default(req, res);
+      } catch (modErr) {
+        if (modErr && modErr.code === 'ERR_MODULE_NOT_FOUND') {
+          res.status(404).json({ error: 'Endpoint not found' });
+        } else {
+          throw modErr;
+        }
+      }
       return;
     }
 
     if (pathname === '/') {
-      await serveStatic(res, 'index.html');
+      const served = (await serveStatic(res, 'index.html')) || (await serveStatic(res, 'index-vercel-static.html'));
+      if (!served) res.status(404).send('Not found');
       return;
     }
 
