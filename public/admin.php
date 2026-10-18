@@ -1521,7 +1521,13 @@ $current_user = rotator_auth_user();
         }
         var firstCleanFound = false;
         targets.forEach(function(u, idx){
-          var c = ck[u]; var v = vs[u];
+          var c = ck[u] || (CHECKS && CHECKS['global'] && CHECKS['global'][u]);
+          if (!c && CHECKS) {
+            for (var bKey in CHECKS) {
+              if (CHECKS[bKey] && CHECKS[bKey][u]) { c = CHECKS[bKey][u]; break; }
+            }
+          }
+          var v = vs[u];
           var badgeCls='badge-wait', txt='NOT CHECKED', reason='Not checked yet', when='';
           // Server check is primary (clean = domain resolves and responds). A single
           // visitor timeout is unreliable for Cloudflare sites, so it can't override a
