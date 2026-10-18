@@ -156,17 +156,24 @@ $cleanText = preg_replace('#(https?://[^\s/]+)/#i', '$1 ', $cleanText);
 
 $domain = null;
 
-// Pattern 1: domain before block indicators (e.g. "Domain wings365games.icu shows blocked status by Komdigi")
-if (preg_match('/(?:domain|situs|link|url)?[:\s]+([\w][\w.-]*\.[a-z]{2,})[:\s]*(?:shows\s+blocked|is\s+(?:now\s+)?blocked|has\s+been\s+blocked|terblokir|diblokir|blokir|blocked)/i', $cleanText, $m)) {
+// Pattern 1 (Primary): Exact Komdigi Bot Alert patterns
+// Example: "🚫 Domain <domain> shows blocked status by Komdigi."
+if (preg_match('/(?:🚫\s*)?Domain\s+([\w][\w.-]*\.[a-z]{2,})\s+shows\s+blocked\s+status\s+by\s+Komdigi/i', $cleanText, $m)) {
     $domain = strtolower(trim($m[1]));
 }
 
-// Pattern 2: domain with "Komdigi Alert", "Komdigi", "Internet Positif", etc.
-if (!$domain && preg_match('/(?:domain|situs|link|url)?[:\s]+([\w][\w.-]*\.[a-z]{2,})[:\s]*(?:Komdigi\s+Alert|Komdigi|Internet\s*Positif|Block\s*Alert)/i', $cleanText, $m)) {
+// Pattern 2 (Primary): Exact Komdigi Alert header
+// Example: "❌ <domain> Komdigi Alert! ❌"
+if (!$domain && preg_match('/(?:❌\s*)?([\w][\w.-]*\.[a-z]{2,})\s+Komdigi\s+Alert/i', $cleanText, $m)) {
     $domain = strtolower(trim($m[1]));
 }
 
-// Pattern 3: Explicit block indicator followed by domain (e.g. "Blocked: domain.com", "Komdigi Alert: domain.com")
+// Pattern 3: Domain before general block indicators
+if (!$domain && preg_match('/(?:domain|situs|link|url)?[:\s]+([\w][\w.-]*\.[a-z]{2,})[:\s]*(?:shows\s+blocked|is\s+(?:now\s+)?blocked|has\s+been\s+blocked|terblokir|diblokir|blokir|blocked)/i', $cleanText, $m)) {
+    $domain = strtolower(trim($m[1]));
+}
+
+// Pattern 4: Explicit block indicator followed by domain (e.g. "Blocked: domain.com", "Internet Positif: domain.com")
 if (!$domain && preg_match('/(?:shows\s+blocked|block\s*alert|komdigi\s*alert|diblokir|terblokir|blokir|blocked|komdigi|internet\s*positif)[\s:—–-]+(?:domain|situs|link|url)?[:\s]+([\w][\w.-]*\.[a-z]{2,})/i', $cleanText, $m)) {
     $domain = strtolower(trim($m[1]));
 }
