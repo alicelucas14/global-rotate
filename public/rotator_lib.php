@@ -425,11 +425,14 @@ function rotator_blocked_urls() {
     foreach ($checks as $brandChecks) {
         if (!is_array($brandChecks)) continue;
         foreach ($brandChecks as $url => $entry) {
-            if (isset($entry['status']) && $entry['status'] === 'blocked') {
-                $blocked[] = $url;
+            $st = $entry['status'] ?? '';
+            // Treat both 'blocked' (Kominfo/Trust+) and 'down' (0 bytes / dead / 500) as unusable
+            if ($st === 'blocked' || $st === 'down') {
+                $u = rotator_norm_url($url);
+                if ($u !== '') $blocked[] = $u;
             }
         }
     }
-    return array_unique($blocked);
+    return array_values(array_unique($blocked));
 }
 

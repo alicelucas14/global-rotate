@@ -12,7 +12,9 @@
 require __DIR__ . '/rotator_lib.php';
 
 header('Content-Type: application/json; charset=utf-8');
-header('Cache-Control: no-store, no-cache');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
 header('X-Robots-Tag: noindex');
 
 $url = trim($_GET['url'] ?? '');
@@ -39,17 +41,20 @@ $checks = rotator_checks_load();
 $normUrl = rtrim($url, '/');
 
 $info = null;
-foreach ($checks as $brandChecks) {
+$foundBrand = null;
+foreach ($checks as $brandSlug => $brandChecks) {
     if (!is_array($brandChecks)) continue;
     // Try exact normalised URL first (the key used by rotator_lib.php).
     if (isset($brandChecks[$normUrl])) {
         $info = $brandChecks[$normUrl];
+        $foundBrand = $brandSlug;
         break;
     }
     // Also try with trailing slash stripped from stored key variants.
     foreach ($brandChecks as $storedUrl => $entry) {
         if (rtrim((string)$storedUrl, '/') === $normUrl) {
             $info = $entry;
+            $foundBrand = $brandSlug;
             break 2;
         }
     }
@@ -81,6 +86,16 @@ if ($info && ($info['status'] ?? '') === 'clean' && !empty($info['verified']) &&
 $res = rotator_check_url($url);
 $status = $res['status'] ?? 'down';
 $ok = ($status === 'clean');
+
+// Persist fresh check result into rotator-checks.json so all endpoints see it immediately
+$res['ts'] = gmdate('c');
+if ($foundBrand && isset($checks[$foundBrand])) {
+    $checks[$foundBrand][$normUrl] = $res;
+} else {
+    if (!isset($checks['global'])) $checks['global'] = [];
+    $checks['global'][$normUrl] = $res;
+}
+rotator_checks_save($checks);
 
 echo json_encode([
     'ok'     => $ok,

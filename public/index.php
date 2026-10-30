@@ -1,4 +1,7 @@
 <?php
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
 require __DIR__ . '/rotator_lib.php';
 
 $data = rotator_load();
@@ -47,13 +50,14 @@ $blockedUrls  = rotator_blocked_urls();
 $cleanCands   = [];
 $blockedCands = [];
 foreach ($candidates as $cu) {
-    if (in_array($cu, $blockedUrls, true)) {
-        $blockedCands[] = $cu;
+    $ncu = rotator_norm_url($cu);
+    if (in_array($ncu, $blockedUrls, true)) {
+        $blockedCands[] = $ncu;
     } else {
-        $cleanCands[] = $cu;
+        $cleanCands[] = $ncu;
     }
 }
-// Keep blocked at the tail so the JS fallback manual-link list still shows them.
+// Keep blocked/down at the tail so the JS fallback manual-link list still shows them.
 $candidates = array_merge($cleanCands, $blockedCands);
 ?>
 <!doctype html>
@@ -419,13 +423,13 @@ $candidates = array_merge($cleanCands, $blockedCands);
         return fetch(srvUrl, { cache: 'no-store', signal: signal })
           .then(function (r) { if (timer) clearTimeout(timer); return r.ok ? r.json() : null; })
           .then(function (d) {
-            if (!d) return probeDirect(url); // server error → fall back
+            if (!d) return 'reject';
             if (d.ok) return 'ok';
-            return 'reject'; // server explicitly probed and rejected (down/blocked/empty)
+            return 'reject';
           })
-          .catch(function () { if (timer) clearTimeout(timer); return probeDirect(url); });
+          .catch(function () { if (timer) clearTimeout(timer); return 'reject'; });
       }
-      return probeDirect(url);
+      return 'reject';
     }
 
     // Direct browser probe — used as fallback when /probe.php is unreachable.
@@ -521,10 +525,15 @@ $candidates = array_merge($cleanCands, $blockedCands);
       // but do NOT report them as blocked, to avoid false "blocked" alarms.
       var rejected = [];
       for (var i = 0; i < list.length; i++) {
+        var candUrl = norm(list[i]);
+        if (BLOCKED_CANDS.indexOf(candUrl) !== -1) {
+          rejected.push(candUrl);
+          continue; // Instantly skip known-bad domains (blocked or down/empty)
+        }
         // eslint-disable-next-line no-await-in-loop
-        var st = await probe(list[i]);
-        if (st === 'ok') { report(list[i], rejected); return go(list[i]); }
-        if (st === 'reject') rejected.push(list[i]);
+        var st = await probe(candUrl);
+        if (st === 'ok') { report(candUrl, rejected); return go(candUrl); }
+        if (st === 'reject') rejected.push(candUrl);
       }
       report('', rejected);
       showManual(list);
