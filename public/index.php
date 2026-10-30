@@ -420,9 +420,8 @@ $candidates = array_merge($cleanCands, $blockedCands);
           .then(function (r) { if (timer) clearTimeout(timer); return r.ok ? r.json() : null; })
           .then(function (d) {
             if (!d) return probeDirect(url); // server error → fall back
-            if (d.ok)                        return 'ok';
-            if (d.status === 'blocked' || d.status === 'down') return 'reject';
-            return probeDirect(url);          // unknown status → fall back
+            if (d.ok) return 'ok';
+            return 'reject'; // server explicitly probed and rejected (down/blocked/empty)
           })
           .catch(function () { if (timer) clearTimeout(timer); return probeDirect(url); });
       }

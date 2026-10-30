@@ -57,60 +57,35 @@ foreach ($checks as $brandChecks) {
 // Timestamp is stored under 'ts' (ISO 8601 string), not 'checked_at'.
 $age = ($info && !empty($info['ts'])) ? (int)(time() - (int)strtotime($info['ts'])) : PHP_INT_MAX;
 
-if ($info && $age < $STALE_SEC) {
-    // Return fresh cached result — no live check needed
-    $status = (string)($info['status'] ?? 'unknown');
-    echo json_encode([
-        'ok'     => ($status === 'clean'),
-        'status' => $status,
-        'age'    => $age,
-    ]);
-    exit;
-}
-
 // Blocked domains: trust the cached verdict for 24 h even if stale.
-// A server-side HEAD from outside Indonesia will succeed even for ISP-blocked
+// A server-side check from outside Indonesia will succeed even for ISP-blocked
 // domains, so we must NOT let a stale live-check override a verified block.
 if ($info && ($info['status'] ?? '') === 'blocked' && $age < 86400) {
     echo json_encode(['ok' => false, 'status' => 'blocked', 'age' => $age, 'cached' => true]);
     exit;
 }
 
-// Cache is stale or missing — do a fast live HEAD request
-if (!function_exists('curl_init')) {
-    echo json_encode(['ok' => false, 'status' => 'no_curl']);
+// If cached result is down and fresh, return down immediately
+if ($info && ($info['status'] ?? '') === 'down' && $age < $STALE_SEC) {
+    echo json_encode(['ok' => false, 'status' => 'down', 'age' => $age, 'reason' => $info['reason'] ?? 'down']);
     exit;
 }
 
-$ch = curl_init();
-curl_setopt_array($ch, [
-    CURLOPT_URL            => $url,
-    CURLOPT_RETURNTRANSFER => true,
-    CURLOPT_FOLLOWLOCATION => true,
-    CURLOPT_MAXREDIRS      => 4,
-    CURLOPT_TIMEOUT        => 6,
-    CURLOPT_CONNECTTIMEOUT => 5,
-    CURLOPT_NOBODY         => true,          // HEAD only — fast
-    CURLOPT_SSL_VERIFYPEER => false,
-    CURLOPT_USERAGENT      => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
-    CURLOPT_HTTPHEADER     => ['Accept: */*', 'Accept-Language: id,en;q=0.9'],
-]);
-curl_exec($ch);
-$httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
-$errno    = curl_errno($ch);
-curl_close($ch);
-
-if ($errno !== 0 || $httpCode === 0) {
-    echo json_encode(['ok' => false, 'status' => 'down', 'http' => $httpCode, 'curl_errno' => $errno]);
+// If cached result is clean, only trust it if verified (meaning body check passed) and fresh
+if ($info && ($info['status'] ?? '') === 'clean' && !empty($info['verified']) && $age < $STALE_SEC) {
+    echo json_encode(['ok' => true, 'status' => 'clean', 'age' => $age]);
     exit;
 }
 
-// Any HTTP response (200, 301, 302, 403, 503…) means the server IS reachable.
-// We only mark as blocked if the checks data explicitly says so.
-$ok = ($httpCode >= 100 && $httpCode < 600);
+// Cache is stale, missing, or unverified — perform live check using rotator_check_url()
+$res = rotator_check_url($url);
+$status = $res['status'] ?? 'down';
+$ok = ($status === 'clean');
+
 echo json_encode([
     'ok'     => $ok,
-    'status' => $ok ? 'clean' : 'error',
-    'http'   => $httpCode,
+    'status' => $status,
+    'reason' => $res['reason'] ?? '',
+    'http'   => $res['http'] ?? 0,
     'age'    => null,
 ]);

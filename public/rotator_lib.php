@@ -192,8 +192,15 @@ function rotator_check_url($url) {
     }
 
     if (!function_exists('curl_init')) {
-        // Fallback: DNS resolved, assume reachable.
-        return ['status' => 'clean', 'reason' => 'Resolves (no HTTP check available)', 'http' => 0];
+        $ctx = stream_context_create([
+            'http' => ['timeout' => 5, 'ignore_errors' => true, 'user_agent' => 'Mozilla/5.0'],
+            'ssl'  => ['verify_peer' => false, 'verify_peer_name' => false]
+        ]);
+        $body = @file_get_contents($url, false, $ctx);
+        if ($body === false || strlen(trim((string)$body)) < 50) {
+            return ['status' => 'down', 'reason' => 'Empty or unreachable (no curl)', 'http' => 0, 'verified' => true];
+        }
+        return ['status' => 'clean', 'reason' => 'Resolves and returns content', 'http' => 200, 'verified' => true];
     }
 
     // 2. HTTP fetch (follow redirects, grab a body sample)
@@ -202,8 +209,8 @@ function rotator_check_url($url) {
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_FOLLOWLOCATION => true,
         CURLOPT_MAXREDIRS      => 5,
-        CURLOPT_TIMEOUT        => 10,
-        CURLOPT_CONNECTTIMEOUT => 6,
+        CURLOPT_TIMEOUT        => 6,
+        CURLOPT_CONNECTTIMEOUT => 4,
         CURLOPT_SSL_VERIFYPEER => false,
         CURLOPT_SSL_VERIFYHOST => 0,
         CURLOPT_USERAGENT      => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
@@ -222,7 +229,7 @@ function rotator_check_url($url) {
         $reason = ($errno === 28)
             ? 'Connection timed out (server network delay or site offline)'
             : 'Connection failed (reset/refused — site offline)';
-        return ['status' => 'down', 'reason' => $reason, 'http' => 0];
+        return ['status' => 'down', 'reason' => $reason, 'http' => 0, 'verified' => true];
     }
 
 
@@ -235,26 +242,32 @@ function rotator_check_url($url) {
     ];
     foreach ($markers as $m) {
         if (strpos($hay, $m) !== false) {
-            return ['status' => 'blocked', 'reason' => 'Redirected to an Internet Positif / Trust+ block notice', 'http' => $http];
+            return ['status' => 'blocked', 'reason' => 'Redirected to an Internet Positif / Trust+ block notice', 'http' => $http, 'verified' => true];
         }
     }
 
-    if ($http >= 200 && $http < 400) {
-        return ['status' => 'clean', 'reason' => 'Reachable and clean (HTTP ' . $http . ')', 'http' => $http];
+    // 4. Empty body check (0-byte or blank white pages)
+    $bodyLen = strlen(trim((string)$body));
+    if ($bodyLen < 50 && !in_array($http, [204, 301, 302, 304, 307, 308], true)) {
+        return ['status' => 'down', 'reason' => 'Server returned an empty blank page (0 bytes)', 'http' => $http, 'body_len' => $bodyLen, 'verified' => true];
     }
-    if (in_array($http, [401, 403, 406, 429, 503], true)) {
-        return ['status' => 'clean', 'reason' => 'Reachable, but protected by anti-bot / WAF (HTTP ' . $http . ') — not blocked', 'http' => $http];
+
+    if ($http >= 200 && $http < 400) {
+        return ['status' => 'clean', 'reason' => 'Reachable and clean (HTTP ' . $http . ')', 'http' => $http, 'body_len' => $bodyLen, 'verified' => true];
+    }
+    if (in_array($http, [401, 403, 406, 429], true)) {
+        return ['status' => 'clean', 'reason' => 'Reachable, but protected by anti-bot / WAF (HTTP ' . $http . ') — not blocked', 'http' => $http, 'body_len' => $bodyLen, 'verified' => true];
     }
     if ($http === 404 || $http === 410) {
-        return ['status' => 'down', 'reason' => 'Page not found (HTTP ' . $http . ')', 'http' => $http];
+        return ['status' => 'down', 'reason' => 'Page not found (HTTP ' . $http . ')', 'http' => $http, 'body_len' => $bodyLen, 'verified' => true];
     }
     if ($http >= 500) {
-        return ['status' => 'down', 'reason' => 'Site error (HTTP ' . $http . ')', 'http' => $http];
+        return ['status' => 'down', 'reason' => 'Site error (HTTP ' . $http . ')', 'http' => $http, 'body_len' => $bodyLen, 'verified' => true];
     }
     if ($http > 0) {
-        return ['status' => 'clean', 'reason' => 'Reachable (HTTP ' . $http . ')', 'http' => $http];
+        return ['status' => 'clean', 'reason' => 'Reachable (HTTP ' . $http . ')', 'http' => $http, 'body_len' => $bodyLen, 'verified' => true];
     }
-    return ['status' => 'down', 'reason' => 'No response from server', 'http' => $http];
+    return ['status' => 'down', 'reason' => 'No response from server', 'http' => $http, 'verified' => true];
 }
 
 /** Check every enabled brand's target URLs and persist the results. */
