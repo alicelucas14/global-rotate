@@ -37,6 +37,7 @@ if (empty($candidates)) {
     }
 }
 $ruleSlug = $rule ? rotator_slug($rule['slug'] ?? $rule['label'] ?? '') : '';
+$rotId    = (string)($rule['rot_id'] ?? '0');
 
 // Option B: strip known-blocked URLs (Telegram alerts + cron checks) from
 // the candidate list before injecting into JS.  Blocked domains go to the
@@ -395,7 +396,9 @@ $candidates = array_merge($cleanCands, $blockedCands);
     }
 
     var TIMEOUT_MS = 6000;
-    var LAST_GOOD_KEY = 'rotator_last_good_' + location.hostname;
+    var ROT_ID = <?php echo json_encode($rotId, JSON_UNESCAPED_SLASHES); ?>;
+    var LAST_GOOD_KEY = 'rotator_last_good_' + location.hostname + (BRAND ? '_' + BRAND : '');
+    var LAST_ROT_KEY  = 'rotator_rot_id_' + location.hostname + (BRAND ? '_' + BRAND : '');
 
     function norm(u) { return String(u || '').trim().replace(/\/+$/, ''); }
 
@@ -451,7 +454,7 @@ $candidates = array_merge($cleanCands, $blockedCands);
       try {
         var dest = new URL(baseUrl);
         var path = location.pathname || '';
-        if (path && path !== '/') {
+        if (path && !['/', '/index.php', '/index.html', '/index-vercel-static.html'].includes(path)) {
           dest.pathname = (dest.pathname.replace(/\/$/, '') + '/' + path.replace(/^\//, '')).replace(/\/+$/, '');
         }
         if (location.search) {
@@ -470,7 +473,7 @@ $candidates = array_merge($cleanCands, $blockedCands);
 
     function go(url) {
       var finalUrl = getFinalUrl(url);
-      try { localStorage.setItem(LAST_GOOD_KEY, url); } catch (e) {}
+      try { localStorage.setItem(LAST_GOOD_KEY, url); if (ROT_ID && ROT_ID !== '0') localStorage.setItem(LAST_ROT_KEY, ROT_ID); } catch (e) {}
       window.location.replace(finalUrl);
     }
 
@@ -498,7 +501,16 @@ $candidates = array_merge($cleanCands, $blockedCands);
       if (!list.length) return showManual(list);
 
       var last = null;
-      try { last = localStorage.getItem(LAST_GOOD_KEY); } catch (e) {}
+      var savedRotId = null;
+      try {
+        savedRotId = localStorage.getItem(LAST_ROT_KEY);
+        if (ROT_ID && ROT_ID !== '0' && savedRotId !== ROT_ID) {
+          localStorage.removeItem(LAST_GOOD_KEY);
+          localStorage.setItem(LAST_ROT_KEY, ROT_ID);
+        } else {
+          last = localStorage.getItem(LAST_GOOD_KEY);
+        }
+      } catch (e) {}
       // Only use the localStorage shortcut if the cached domain is not in the
       // server-side blocked list. Blocked domains can still respond to HTTP from
       // outside Indonesia, so probe() alone cannot reliably rule them out.

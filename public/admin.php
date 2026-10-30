@@ -92,6 +92,11 @@ if ($action === 'login') {
 if ($action === 'account' && is_logged_in()) {
     if (!check_csrf()) {
         $error = 'Session expired, please try again.';
+        if (!empty($_POST['ajax'])) {
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['ok' => false, 'error' => $error]);
+            exit;
+        }
     } else {
         $cur     = $_POST['current'] ?? '';
         $newUser = trim($_POST['new_user'] ?? '');
@@ -118,6 +123,11 @@ if ($action === 'account' && is_logged_in()) {
 if ($action === 'save' && is_logged_in()) {
     if (!check_csrf()) {
         $error = 'Session expired, please try again.';
+        if (!empty($_POST['ajax'])) {
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['ok' => false, 'error' => $error]);
+            exit;
+        }
     } else {
         $payload = json_decode($_POST['payload'] ?? '[]', true);
         $rules = [];
@@ -146,6 +156,7 @@ if ($action === 'save' && is_logged_in()) {
                     'hosts'   => $hosts,
                     'targets' => $targets,
                     'enabled' => $enabled,
+                    'rot_id'  => (string)($r['rot_id'] ?? '0'),
                 ];
             }
         }
@@ -156,6 +167,17 @@ if ($action === 'save' && is_logged_in()) {
         } else {
             $error = 'Could not write data file. Check folder permissions (the web root parent must be writable by the web user).';
         }
+        $isAjax = !empty($_POST['ajax']) || (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest');
+        if ($isAjax) {
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode([
+                'ok'     => empty($error),
+                'error'  => $error ?: null,
+                'notice' => $notice ?: null,
+                'rules'  => $rules,
+            ]);
+            exit;
+        }
     }
 }
 
@@ -163,6 +185,11 @@ if ($action === 'save' && is_logged_in()) {
 if ($action === 'pool_save' && is_logged_in()) {
     if (!check_csrf()) {
         $error = 'Session expired, please try again.';
+        if (!empty($_POST['ajax'])) {
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['ok' => false, 'error' => $error]);
+            exit;
+        }
     } else {
         $raw_urls = preg_split('/[\r\n]+/', $_POST['pool_urls'] ?? '');
         if (rotator_pool_save($raw_urls)) {
@@ -177,6 +204,11 @@ if ($action === 'pool_save' && is_logged_in()) {
 if ($action === 'tg_save' && is_logged_in()) {
     if (!check_csrf()) {
         $error = 'Session expired, please try again.';
+        if (!empty($_POST['ajax'])) {
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['ok' => false, 'error' => $error]);
+            exit;
+        }
     } else {
         $tgData = [
             'token'   => trim($_POST['tg_token']   ?? ''),
@@ -1268,6 +1300,7 @@ $current_user = rotator_auth_user();
           'hosts'   => implode("\n", $r['hosts'] ?? []),
           'targets' => implode("\n", $r['targets'] ?? []),
           'enabled' => !empty($r['enabled']),
+          'rot_id'  => (string)($r['rot_id'] ?? '0'),
         ];
     }, $rules), JSON_UNESCAPED_SLASHES); ?>;
 
@@ -1296,6 +1329,8 @@ $current_user = rotator_auth_user();
     var seq = 0;
 
     function selectPanel(key) {
+      try { localStorage.setItem('admin_active_panel', key); } catch(e){}
+      if (history.replaceState) history.replaceState(null, '', '#' + key);
       var isAccount  = (key === 'account');
       var isTelegram = (key === 'telegram');
       var isSpecial  = isAccount || isTelegram;
@@ -1392,6 +1427,7 @@ $current_user = rotator_auth_user();
       var node = tpl.content.firstElementChild.cloneNode(true);
       node.dataset.id  = r.id || '';
       node.dataset.key = key;
+      node.dataset.rotId = r.rot_id || '0';
       var labelInput   = node.querySelector('.f-label');
       var enabledInput = node.querySelector('.f-enabled');
       labelInput.value = r.label || '';
@@ -1592,8 +1628,48 @@ $current_user = rotator_auth_user();
         var firstRow = tgtListEl.querySelector('.tgt-row');
         if (firstRow) tgtListEl.appendChild(firstRow);
         tgtRenumber(); tgtSerialize();
-        var f = document.getElementById('rulesForm');
-        if (f.requestSubmit) f.requestSubmit(); else f.submit();
+
+        var rotBtn = node.querySelector('.f-rotate');
+        var origHtml = rotBtn.innerHTML;
+        rotBtn.disabled = true;
+        rotBtn.textContent = 'Rotating\u2026';
+
+        // Bump rotation timestamp to immediately bust visitor localStorage cache
+        node.dataset.rotId = String(Date.now());
+
+        // Immediately update live status UI so [IN USE] shifts to the new #1 domain
+        renderStatus();
+
+        // Remember active panel key
+        try { localStorage.setItem('admin_active_panel', key); } catch(e){}
+        if (history.replaceState) history.replaceState(null, '', '#' + key);
+
+        // Build full payload and save via AJAX
+        var out = buildPayload();
+        var csrfVal = document.querySelector('#rulesForm input[name="csrf"]').value;
+        var fd = new FormData();
+        fd.append('action', 'save');
+        fd.append('csrf', csrfVal);
+        fd.append('payload', JSON.stringify(out));
+        fd.append('ajax', '1');
+
+        fetch('admin.php', { method: 'POST', body: fd })
+          .then(function(r){ return r.json(); })
+          .then(function(res){
+            if (!res || !res.ok) throw new Error((res && res.error) || 'Save failed');
+            rotBtn.textContent = '\u2713 Rotated to next!';
+            setTimeout(function(){
+              rotBtn.disabled = false;
+              rotBtn.innerHTML = origHtml;
+            }, 2000);
+          })
+          .catch(function(err){
+            console.warn('AJAX rotate failed, falling back to form submit:', err);
+            document.getElementById('payload').value = JSON.stringify(out);
+    
+            var f = document.getElementById('rulesForm');
+            if (f.requestSubmit) f.requestSubmit(); else f.submit();
+          });
       });
 
       if (select) selectPanel(key);
@@ -1602,11 +1678,26 @@ $current_user = rotator_auth_user();
     INITIAL.forEach(function (r) { addRule(r, false); });
     if (!INITIAL.length) addRule(null, false);
     var firstItem = sideList.querySelector('.side-item');
-    if (firstItem) selectPanel(firstItem.dataset.key);
+    var savedKey = (location.hash || '').replace(/^#/, '');
+    if (!savedKey) {
+      try { savedKey = localStorage.getItem('admin_active_panel'); } catch(e){}
+    }
+    var targetItem = savedKey ? sideList.querySelector('.side-item[data-key="' + savedKey + '"]') : null;
+    if (savedKey === 'account') {
+      selectPanel('account');
+    } else if (savedKey === 'telegram') {
+      selectPanel('telegram');
+    } else if (savedKey === 'pool') {
+      selectPanel('pool');
+    } else if (targetItem) {
+      selectPanel(targetItem.dataset.key);
+    } else if (firstItem) {
+      selectPanel(firstItem.dataset.key);
+    }
 
     document.getElementById('addRule').addEventListener('click', function () { addRule({ enabled:true }, true); });
 
-    document.getElementById('rulesForm').addEventListener('submit', function () {
+    function buildPayload() {
       var out = [];
       panels.querySelectorAll('.panel').forEach(function (n) {
         out.push({
@@ -1614,10 +1705,16 @@ $current_user = rotator_auth_user();
           label:   n.querySelector('.f-label').value,
           hosts:   n.querySelector('.f-hosts').value,
           targets: n.querySelector('.f-targets').value,
-          enabled: n.querySelector('.f-enabled').checked
+          enabled: n.querySelector('.f-enabled').checked,
+          rot_id:  n.dataset.rotId || '0'
         });
       });
       document.getElementById('payload').value = JSON.stringify(out);
+      return out;
+    }
+
+    document.getElementById('rulesForm').addEventListener('submit', function () {
+      buildPayload();
     });
   </script>
 
@@ -1811,6 +1908,8 @@ $current_user = rotator_auth_user();
     // Patch selectPanel to also handle pool + telegram panels.
     var _origSelect = selectPanel;
     selectPanel = function (key) {
+      try { localStorage.setItem('admin_active_panel', key); } catch(e){}
+      if (history.replaceState) history.replaceState(null, '', '#' + key);
       var isPool = (key === 'pool');
       poolForm.classList.toggle('active', isPool);
       if (sideDomainPool) sideDomainPool.classList.toggle('active', isPool);
